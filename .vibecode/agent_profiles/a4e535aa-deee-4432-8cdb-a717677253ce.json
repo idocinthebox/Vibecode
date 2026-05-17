@@ -1,0 +1,15 @@
+{
+  "profile_id": "a4e535aa-deee-4432-8cdb-a717677253ce",
+  "name": "codex-build",
+  "target_agent": "OpenAI Codex",
+  "max_context_tokens": 1500,
+  "include_success_patterns": true,
+  "include_failure_patterns": true,
+  "include_project_rules": true,
+  "include_recent_usage": false,
+  "output_format": "markdown",
+  "template_path": "templates/codex_build.md",
+  "created_at": "2026-05-17T01:07:43.130407+00:00",
+  "updated_at": "2026-05-17T01:07:43.130407+00:00",
+  "is_active": true
+}

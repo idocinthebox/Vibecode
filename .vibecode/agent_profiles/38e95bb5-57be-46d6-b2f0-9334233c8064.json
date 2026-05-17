@@ -1,0 +1,15 @@
+{
+  "profile_id": "38e95bb5-57be-46d6-b2f0-9334233c8064",
+  "name": "opus-review",
+  "target_agent": "Claude Opus",
+  "max_context_tokens": 1800,
+  "include_success_patterns": true,
+  "include_failure_patterns": true,
+  "include_project_rules": true,
+  "include_recent_usage": false,
+  "output_format": "markdown",
+  "template_path": "templates/opus_review.md",
+  "created_at": "2026-05-17T01:07:43.130407+00:00",
+  "updated_at": "2026-05-17T01:07:43.130407+00:00",
+  "is_active": true
+}

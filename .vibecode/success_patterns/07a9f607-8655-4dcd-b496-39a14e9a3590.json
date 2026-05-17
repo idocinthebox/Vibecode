@@ -1,0 +1,39 @@
+{
+  "pattern_id": "07a9f607-8655-4dcd-b496-39a14e9a3590",
+  "name": "PyInstaller build fix excluding PyQt5",
+  "intent_description": "Fix PyInstaller Qt conflict",
+  "language": "python",
+  "framework": "PySide6",
+  "file_type": "",
+  "tags": [
+    "build",
+    "pyinstaller",
+    "qt"
+  ],
+  "affected_files": [
+    "pyproject.toml",
+    "build.spec"
+  ],
+  "original_prompt": "",
+  "reasoning_summary": "Exclude PyQt5 from PyInstaller bundle to avoid Qt binding conflict",
+  "reasoning_steps": [],
+  "code_before": "",
+  "code_after": "",
+  "diff": "",
+  "explanation": "",
+  "token_cost_original": 17,
+  "token_cost_retrieval": 17,
+  "estimated_tokens_saved": 0,
+  "confidence_score": 1.0,
+  "usage_count": 0,
+  "success_rate": 1.0,
+  "source_type": "manual",
+  "source_ref": "",
+  "source_commit": "",
+  "source_file_path": "",
+  "content_hash": "9ed7029d4aac25442c9b51a09190bee14aa35a8836c73ae42efc2e2c40230833",
+  "created_at": "2026-05-17T01:08:53.244510+00:00",
+  "updated_at": "2026-05-17T01:08:53.244510+00:00",
+  "last_used": null,
+  "is_active": true
+}
