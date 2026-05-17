@@ -1,0 +1,376 @@
+{
+  "name": "vibe-code",
+  "displayName": "VibeCode",
+  "description": "Token-efficient AI coding memory for VSCode",
+  "version": "0.1.0",
+  "publisher": "vibecode",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:vibeCode.searchMemory",
+    "onCommand:vibeCode.injectContext",
+    "onCommand:vibeCode.captureSuccess",
+    "onCommand:vibeCode.captureFailure",
+    "onCommand:vibeCode.confirmAutoCapture",
+    "onCommand:vibeCode.discardAutoCapture",
+    "onCommand:vibeCode.openReviewQueue",
+    "onCommand:vibeCode.serviceStatus",
+    "onView:vibeCodeMemory",
+    "onView:vibeCodeReviewQueue",
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vibeCode.searchMemory",
+        "title": "Search VibeCode Memory",
+        "category": "VibeCode",
+        "icon": "$(search)"
+      },
+      {
+        "command": "vibeCode.injectContext",
+        "title": "Generate Agent Context",
+        "category": "VibeCode",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "vibeCode.captureSuccess",
+        "title": "Capture Selection as Success Pattern",
+        "category": "VibeCode",
+        "icon": "$(check)"
+      },
+      {
+        "command": "vibeCode.captureFailure",
+        "title": "Capture Selection as Failure Warning",
+        "category": "VibeCode",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "vibeCode.serviceStatus",
+        "title": "Check VibeCode Service Status",
+        "category": "VibeCode",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "vibeCode.openSettings",
+        "title": "Open VibeCode Settings",
+        "category": "VibeCode",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "vibeCode.refreshMemory",
+        "title": "Refresh VibeCode Memory",
+        "category": "VibeCode",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vibeCode.filterMemory",
+        "title": "Filter VibeCode Memory",
+        "category": "VibeCode",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "vibeCode.previewMemory",
+        "title": "Preview Memory Item",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.copyMemoryContext",
+        "title": "Copy Memory Context",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.ignoreWarning",
+        "title": "Ignore This Warning in Workspace",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.generateContextFromDiagnostic",
+        "title": "Generate Agent Context for This Warning",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.captureFailureFromDiagnostic",
+        "title": "Capture as Failure Pattern",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.searchRelatedMemory",
+        "title": "Search Related Memory",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.confirmAutoCapture",
+        "title": "Confirm Auto-Captured Pattern",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.discardAutoCapture",
+        "title": "Discard Auto-Captured Pattern",
+        "category": "VibeCode"
+      },
+      {
+        "command": "vibeCode.openReviewQueue",
+        "title": "Open Auto-Capture Review Queue",
+        "category": "VibeCode",
+        "icon": "$(list-unordered)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vibeCode.captureSuccess",
+          "when": "editorHasSelection",
+          "group": "vibeCode@1"
+        },
+        {
+          "command": "vibeCode.captureFailure",
+          "when": "editorHasSelection",
+          "group": "vibeCode@2"
+        },
+        {
+          "command": "vibeCode.injectContext",
+          "group": "vibeCode@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "vibeCode.refreshMemory",
+          "when": "view == vibeCodeMemory",
+          "group": "navigation"
+        },
+        {
+          "command": "vibeCode.filterMemory",
+          "when": "view == vibeCodeMemory",
+          "group": "navigation"
+        },
+        {
+          "command": "vibeCode.openReviewQueue",
+          "when": "view == vibeCodeReviewQueue",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vibeCode.confirmAutoCapture",
+          "when": "view == vibeCodeReviewQueue && viewItem == pendingReviewItem",
+          "group": "inline"
+        },
+        {
+          "command": "vibeCode.discardAutoCapture",
+          "when": "view == vibeCodeReviewQueue && viewItem == pendingReviewItem",
+          "group": "inline"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibeCode",
+          "title": "VibeCode",
+          "icon": "media/icons/pattern-light.svg"
+        }
+      ]
+    },
+    "views": {
+      "vibeCode": [
+        {
+          "id": "vibeCodeMemory",
+          "name": "Memory"
+        },
+        {
+          "id": "vibeCodeStats",
+          "name": "Token Savings"
+        },
+        {
+          "id": "vibeCodeReviewQueue",
+          "name": "Pending Review"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VibeCode",
+      "properties": {
+        "vibeCode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable VibeCode integration."
+        },
+        "vibeCode.connectionMode": {
+          "type": "string",
+          "enum": [
+            "localService"
+          ],
+          "default": "localService",
+          "description": "How the extension connects to VibeCode."
+        },
+        "vibeCode.localServiceUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8765",
+          "description": "VibeCode local service URL."
+        },
+        "vibeCode.defaultAgentProfile": {
+          "type": "string",
+          "default": "vscode-agent",
+          "description": "Default VibeCode agent profile."
+        },
+        "vibeCode.maxInjectedTokens": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 250,
+          "maximum": 8000,
+          "description": "Maximum generated context tokens."
+        },
+        "vibeCode.includeFailureWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include failure warnings in generated context."
+        },
+        "vibeCode.projectRootMode": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "gitRoot",
+            "manual"
+          ],
+          "default": "gitRoot",
+          "description": "How VibeCode determines project root."
+        },
+        "vibeCode.manualProjectRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Manual project root if projectRootMode is manual."
+        },
+        "vibeCode.showTokenSavings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show estimated token savings in the status bar."
+        },
+        "vibeCode.inlineWarnings.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show VibeCode inline failure warnings."
+        },
+        "vibeCode.inlineWarnings.minSeverity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "high",
+          "description": "Minimum severity for inline warnings."
+        },
+        "vibeCode.inlineWarnings.debounceMs": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Delay before checking VibeCode memory after edits."
+        },
+        "vibeCode.inlineWarnings.maxDiagnostics": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 25,
+          "description": "Maximum VibeCode diagnostics per file."
+        },
+        "vibeCode.inlineWarnings.checkOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check current document when opened."
+        },
+        "vibeCode.inlineWarnings.checkOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check current document when saved."
+        },
+        "vibeCode.autoCapture.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically capture agent successes and failures."
+        },
+        "vibeCode.autoCapture.failureWindowSec": {
+          "type": "number",
+          "default": 180,
+          "minimum": 30,
+          "maximum": 1800,
+          "description": "Window to correlate an agent edit with a new diagnostic or revert."
+        },
+        "vibeCode.autoCapture.successWindowSec": {
+          "type": "number",
+          "default": 120,
+          "minimum": 30,
+          "maximum": 1800,
+          "description": "Window to correlate an agent edit with a cleared diagnostic or passing test."
+        },
+        "vibeCode.autoCapture.minConfidence": {
+          "type": "number",
+          "default": 0.6,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum confidence before auto-saving a pattern."
+        },
+        "vibeCode.autoCapture.requireReview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hold auto-captures in a review queue until the user confirms."
+        },
+        "vibeCode.autoCorrect.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Inject prevention rules into agent context automatically."
+        },
+        "vibeCode.autoCorrect.maxRulesPerInjection": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 25
+        },
+        "vibeCode.attribution.agentExtensionIds": {
+          "type": "array",
+          "default": [
+            "GitHub.copilot",
+            "GitHub.copilot-chat",
+            "openai.openai-codex",
+            "openai.chatgpt",
+            "anysphere.cursorpyright",
+            "Cursor.cursor",
+            "google.antigravity",
+            "anthropic.claude-code"
+          ],
+          "description": "Extension IDs treated as AI coding agents for edit attribution."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "webpack --mode development",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "vsix": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^8.57.0",
+    "glob": "^13.0.6",
+    "mocha": "^10.3.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

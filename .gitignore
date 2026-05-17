@@ -35,3 +35,10 @@ build/
 Thumbs.db
 KIMI_2.6_BUILD_PACKET.md
 .kimi/
+
+# VS Code extension artifacts
+vibe-code-extension/node_modules/
+vibe-code-extension/out/
+vibe-code-extension/.vscode-test/
+vibe-code-extension/*.vsix
+vibe-code-extension/.eslintcache
