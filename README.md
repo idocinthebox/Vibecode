@@ -54,6 +54,20 @@ VibeCode builds a local memory bank of your successful patterns, failed attempts
 - Reports show daily/weekly savings and hit rates.
 - Context injection respects a token budget; prioritizes high-confidence failure warnings.
 
+#### Real-world example: one small footgun, real money
+
+During a single dogfooding session on this repo, the agent rediscovered four sticky footguns it had hit before — duplicate workspace folders, PowerShell `\"` quoting, `git push` masking a failed commit with `Everything up-to-date`, and sibling typer subcommands not sharing option names. Total wasted exchanges: **~14,000 tokens**.
+
+At Claude Opus pricing (~$15/M input, $75/M output; ~70/30 retry mix → ~$33/M blended), that is **~$0.46 of pure rediscovery in one session**. Extrapolated:
+
+| Scope | Approx. wasted spend |
+|---|---|
+| 1 dev, 1 session | ~$0.46 |
+| 1 dev, 5 sessions/week | ~$1.50–2/week |
+| 100-dev team, 1 year | **~$7–10k/year** |
+
+With those four patterns captured in VibeCode (`vibecode search` / `vibecode inject` surfaces them before the agent edits), the same exchanges shrink to a single retrieval (~200 tokens). The real win is wall-clock: 5–15 minutes saved per avoided footgun, which dwarfs the token cost at any reasonable hourly rate.
+
 ---
 
 ## Quick Start
