@@ -20,17 +20,20 @@ VibeCode builds a local memory bank of your successful patterns, failed attempts
 ## Features
 
 ### 🧩 Memory Bank
+
 - **Success Patterns** — Save working solutions with context, reasoning traces, and token metrics.
 - **Failure Patterns** — Capture what went wrong and why; prevention rules surface as inline warnings.
 - **Project Rules** — Codify conventions ("use Pydantic v2", "no sync DB calls in async handlers") once.
 
 ### 🔁 Auto-Capture Loop (Packet 5)
+
 - **Agent edit observation** — Tracks agent-authored edits and correlates them with diagnostics, test outcomes, reverts, and terminal results.
 - **Automatic success/failure capture** — Stores recurring outcomes with confidence, occurrence counts, agent source, and review state.
 - **Pre-edit guardrail** — New pre-edit check endpoint and MCP tool return matching failure rules before an agent writes code.
 - **Review queue** — Pending auto-captures can be confirmed or discarded from the extension sidebar.
 
 ### 🔌 Multi-Interface
+
 | Interface | Status | Description |
 |---|---|---|
 | **VSCode Extension** | ✅ Active | Sidebar memory browser, inline diagnostics, hover tooltips, quick-fix code actions |
@@ -39,12 +42,14 @@ VibeCode builds a local memory bank of your successful patterns, failed attempts
 | **Local HTTP API** | ✅ Active | FastAPI service on `127.0.0.1:8765` for custom tooling |
 
 ### 🛡️ Privacy & Security
+
 - **100% local by default** — SQLite backend; optional PostgreSQL for teams.
 - **Secret redaction** — API keys, passwords, and private keys stripped before storage.
 - **Project allowlist** — Only explicitly allowed project paths can write to the memory bank.
 - **No cloud telemetry** — Your code never leaves your machine.
 
 ### 📊 Token Economics
+
 - Tracks estimated tokens saved per retrieval.
 - Reports show daily/weekly savings and hit rates.
 - Context injection respects a token budget; prioritizes high-confidence failure warnings.
@@ -77,6 +82,7 @@ Or install directly from the VSIX in the repo releases.
 ### 3. Capture your first pattern
 
 **CLI:**
+
 ```bash
 vibecode capture-success --name "FastAPI dependency injection" \
   --intent "Refactor DB session to dependency" \
@@ -166,12 +172,14 @@ Tools exposed: `search_memory`, `inject_context`, `capture_failure`, `pre_edit_c
 ## Development
 
 ### Python Tests
+
 ```bash
 pytest tests/ -v
 # Includes Packet 5 suites for outcome tracking, auto-capture, review routes, and MCP pre-edit checks
 ```
 
 ### Extension Tests
+
 ```bash
 cd vibe-code-extension
 npm run compile
@@ -180,6 +188,7 @@ npm run test
 ```
 
 ### Build VSIX
+
 ```bash
 npm run compile
 npx vsce package --no-dependencies
