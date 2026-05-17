@@ -24,6 +24,12 @@ VibeCode builds a local memory bank of your successful patterns, failed attempts
 - **Failure Patterns** — Capture what went wrong and why; prevention rules surface as inline warnings.
 - **Project Rules** — Codify conventions ("use Pydantic v2", "no sync DB calls in async handlers") once.
 
+### 🔁 Auto-Capture Loop (Packet 5)
+- **Agent edit observation** — Tracks agent-authored edits and correlates them with diagnostics, test outcomes, reverts, and terminal results.
+- **Automatic success/failure capture** — Stores recurring outcomes with confidence, occurrence counts, agent source, and review state.
+- **Pre-edit guardrail** — New pre-edit check endpoint and MCP tool return matching failure rules before an agent writes code.
+- **Review queue** — Pending auto-captures can be confirmed or discarded from the extension sidebar.
+
 ### 🔌 Multi-Interface
 | Interface | Status | Description |
 |---|---|---|
@@ -153,7 +159,7 @@ Add to your Claude/Cursor MCP config:
 }
 ```
 
-Tools exposed: `search_memory`, `inject_context`, `capture_failure`.
+Tools exposed: `search_memory`, `inject_context`, `capture_failure`, `pre_edit_check`, `get_current_context`.
 
 ---
 
@@ -162,7 +168,7 @@ Tools exposed: `search_memory`, `inject_context`, `capture_failure`.
 ### Python Tests
 ```bash
 pytest tests/ -v
-# 71 passed, 19 skipped (PG Docker tests skip cleanly)
+# Includes Packet 5 suites for outcome tracking, auto-capture, review routes, and MCP pre-edit checks
 ```
 
 ### Extension Tests
