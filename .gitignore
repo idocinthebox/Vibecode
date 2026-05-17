@@ -21,6 +21,7 @@ build/
 .vibecode/allowed_projects.json
 .vibecode/exports/
 .vibecode/logs/
+.vibecode/config.toml
 
 # IDE
 .vscode/

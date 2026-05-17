@@ -2,7 +2,7 @@
 
 Thin client for the VibeCode local AI coding memory service.
 
-## Packet 5 Features
+## VibeCode Features
 
 - Automatic agent edit observation and outcome reporting to the local service
 - Auto-capture notifications when VibeCode learns new success/failure patterns
