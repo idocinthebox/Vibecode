@@ -303,6 +303,7 @@ This unified packet adds the following deltas:
 Each phase is independently shippable. Do not start phase N+1 until phase N's exit criteria are met.
 
 ### Phase 0 - Shared Foundations
+
 1. Schema migrations for new columns and tables (Section 6).
 2. Extend `vibecode/core/security.py` redaction patterns (Mongo URIs, Slack `xoxb-`, JWT, AWS session tokens).
 3. New `AuditLogRepository` writing to `audit_log`.
@@ -312,6 +313,7 @@ Each phase is independently shippable. Do not start phase N+1 until phase N's ex
 Exit criteria: migrations applied, redaction unit tests pass for new patterns, every existing capture/search/inject path writes one audit row.
 
 ### Phase 1 - Harvester MVP
+
 1. `KnowledgeHarvester` service with `DocSourceWalker`, `ClaudeMdExtractor`, `MarkdownRuleExtractor`, normalizer, dedupe, review-queue writer, JSON report writer to `.vibecode/harvest_report.json`.
 2. `POST /harvest/scan` + `POST /harvest/preview` + `GET /harvest/report`.
 3. CLI: `vibecode harvest scan|preview|report|sources`.
@@ -319,6 +321,7 @@ Exit criteria: migrations applied, redaction unit tests pass for new patterns, e
 Exit criteria: scanning the VibeCode repo itself produces ≥ 20 candidates, no duplicates created on re-run, all writes audited.
 
 ### Phase 2 - Harvester Full Source Coverage
+
 1. Add `ADRExtractor`, `ChangelogFixExtractor`, `LinterConfigExtractor`, `InlineCommentExtractor`.
 2. Embedding-based near-duplicate detection (if embeddings available; otherwise no-op).
 3. Extension command + first-run prompt + sidebar review group + post-scan webview.
@@ -326,6 +329,7 @@ Exit criteria: scanning the VibeCode repo itself produces ≥ 20 candidates, no 
 Exit criteria: scanning a repo with CHANGELOG and ADRs produces correctly typed failure patterns and architecture rules; extension UX verified manually on Vibecoder workspace.
 
 ### Phase 3 - Pro Databank Server
+
 1. Pro API service implementing all endpoints in `Build_Packet_6_Pro_Shared_Databank.md` Sections 5 and 6.
 2. Moderation queue worker with SLA timers.
 3. Postgres + pgvector schema, embedding ingestion job.
@@ -334,6 +338,7 @@ Exit criteria: scanning a repo with CHANGELOG and ADRs produces correctly typed 
 Exit criteria: contribute → moderate (approve) → search → retract round-trip works end-to-end against a local Docker Postgres.
 
 ### Phase 4 - Pro Sync Adapter (client)
+
 1. `vibecode/integrations/pro_sync.py` with submit, search, feedback, retract.
 2. Local opt-in workflow: per-item "Share to databank" action in CLI + extension; never auto-publish.
 3. Retrieval merge in `InjectionService`: local → team → global with `local_first_boost`.
@@ -342,6 +347,7 @@ Exit criteria: contribute → moderate (approve) → search → retract round-tr
 Exit criteria: a confirmed harvested rule can be shared with one click, appears in `POST /databank/search`, and is merged behind local results during `inject_context`.
 
 ### Phase 5 - Telemetry, Hardening, Final Report
+
 1. Token-savings report split into `local`, `harvested`, `shared_team`, `shared_global` buckets via the audit log.
 2. Per-endpoint rate limiting middleware applied to capture/inject/search/observe/harvest.
 3. Confidence-decay background job (every 6h).
@@ -357,6 +363,7 @@ Exit criteria: all acceptance criteria in Section 11 pass; final report committe
 Tests are mandatory exit criteria for every phase. Use the existing pytest + mocha layout.
 
 ### 10.1 Phase 0
+
 1. `tests/test_audit_log_repository.py` - insert + query by actor/action/target.
 2. `tests/test_secret_redaction.py` - add cases: MongoDB SRV, Slack bot tokens, JWT, AWS session token.
 3. `tests/test_schema_limits.py` - oversize fields rejected with 422.
@@ -364,6 +371,7 @@ Tests are mandatory exit criteria for every phase. Use the existing pytest + moc
 5. Alembic migration test: upgrade head + downgrade one step.
 
 ### 10.2 Phase 1
+
 1. `tests/harvest/test_walker.py` - .gitignore + .vibecodeignore + size cap + max_files.
 2. `tests/harvest/test_claude_md_extractor.py` - golden fixture in `tests/fixtures/harvest/CLAUDE.md` produces expected rule list.
 3. `tests/harvest/test_markdown_rule_extractor.py` - imperative verbs, pitfall blocks with Fix sibling.
@@ -373,6 +381,7 @@ Tests are mandatory exit criteria for every phase. Use the existing pytest + moc
 7. `tests/cli/test_harvest_cli.py` - `vibecode harvest scan --dry-run` prints expected summary.
 
 ### 10.3 Phase 2
+
 1. Extractor unit tests for ADR, Changelog, Linter, InlineComment (one fixture each).
 2. `tests/harvest/test_near_dup.py` - cosine ≥ 0.92 deduped; below threshold kept.
 3. Extension mocha tests:
@@ -380,6 +389,7 @@ Tests are mandatory exit criteria for every phase. Use the existing pytest + moc
    - `test/suite/harvestSidebar.test.ts` - bulk-confirm flips review_state.
 
 ### 10.4 Phase 3
+
 1. `tests/databank/test_contributions.py` - submit → dedupe_status, validation rules (pii_risk_score, title/summary lengths).
 2. `tests/databank/test_moderation.py` - approve / reject / escalate transitions; SLA timer queued.
 3. `tests/databank/test_search.py` - ranking honors local-first boost when client sends mixed scopes.
@@ -387,17 +397,20 @@ Tests are mandatory exit criteria for every phase. Use the existing pytest + moc
 5. `tests/databank/test_pgvector.py` - embedding insert + nearest-neighbor query against Docker Postgres.
 
 ### 10.5 Phase 4
+
 1. `tests/test_pro_sync_adapter.py` - submit/search/feedback/retract mocked at httpx layer.
 2. `tests/test_injection_merge.py` - given mocked local + team + global results, the merge produces local-first order with the documented boost.
 3. Extension mocha: `proShareCommand.test.ts` - "Share to databank" gated by opt-in; never fires on unconfirmed items.
 
 ### 10.6 Phase 5
+
 1. `tests/test_token_report_buckets.py` - buckets sum to the audit log and never double-count prevention hits.
 2. `tests/test_rate_limit_middleware.py` - per-route limits enforced; 429 returned with `retry_after_sec`.
 3. `tests/test_confidence_decay_job.py` - patterns aged > 30d see confidence drop per formula; job idempotent.
 4. `tests/test_doctor_extended.py` - new rows appear and surface failures correctly.
 
 ### 10.7 Cross-cutting requirements
+
 1. All new tests must run under the existing `pytest` and `npm test` invocations with no extra flags.
 2. No test may require network access except those marked `@pytest.mark.pro_server` which run against the Docker Postgres + the local Pro server fixture.
 3. Coverage gate: each new module ≥ 85% line coverage.
@@ -604,6 +617,41 @@ Exit criteria:
 | Local-first invariant regresses under merge | Contract test `test_injection_merge.py` enforces slot 1 = local when local has any result |
 | Pro server outage hurts agent UX | Pro calls are best-effort with 750ms hard timeout; local results are returned regardless |
 | Auto-confirm too aggressive | Default 0.8, configurable, every auto-confirm still writes audit log and is retractable |
+
+---
+
+## 16. Packet 8 Candidates — Mid-Task Auto-Retrieval
+
+Discovered during a 2026-05-17 dogfooding session where the agent rediscovered the same captured PowerShell-quoting failure (`abc9ec56`) three times in one conversation despite the pattern already being in the KB. Root cause: captured rules only help if the agent re-queries the KB between sub-steps, but Packet 5's auto-installed agent rules only nudge `vibecode_inject_context` at task start, not mid-task.
+
+### 16.1 Auto-inject on tool-call error
+
+**Behavior.** When the VS Code extension observes a non-zero exit from a terminal command, or the MCP client reports a tool error, automatically issue a `vibecode_search_memory` call keyed on the failing command + the first 120 chars of stderr, and surface any matching failure patterns inline (toast, sidebar highlight, or appended to the next agent prompt via the MCP context channel).
+
+**Acceptance.**
+- A configurable threshold (default: any exit ≥ 1 from a tracked terminal) triggers the search.
+- Search uses both the command tokens and the stderr fragment; results are deduped against the current session's already-shown warnings.
+- If at least one pattern matches with score above `vibeCode.autoRecall.minScore` (default 0.5), inject it into the agent context channel (MCP `notify` or extension chat participant injection) within 500 ms of the error.
+- Audit log entry: `auto_recall_on_error` with command, stderr hash, returned pattern ids.
+- Opt-out setting `vibeCode.autoRecall.onTerminalError` (default `true`).
+
+**Why it ships in Packet 8 not 6/7.** Requires hooks into the agent's context channel that today only exist for Copilot Chat; Cursor and Windsurf integrations land in Packet 7, so Packet 8 is the earliest layer all four supported clients have the surface.
+
+### 16.2 Pre-flight scan on agent-authored terminal commands
+
+**Behavior.** When the extension's edit-observation loop (Packet 5 §4) sees an agent-issued `run_in_terminal` call, scan the proposed command for known antipatterns from the local KB (e.g. `\"` inside `git commit -m`, `--query`-like substrings inside `-m`, native-exe calls with embedded `"`), and either (a) annotate the chat with a warning before execution, or (b) if confidence ≥ 0.9, block-and-suggest with a one-click rewrite.
+
+**Acceptance.**
+- A new `vibecode pre_command_check` MCP tool accepts `{command, shell, cwd}` and returns matching failure patterns + suggested rewrite.
+- The VS Code extension wires this tool to the agent's terminal-tool surface where the API permits (Copilot Chat: chat participant pre-hook; MCP: prompt-prefix injection).
+- Test fixture: feed the PowerShell `\"` antipattern and verify the warning surfaces before execution.
+- Audit log entry: `pre_command_check` with command hash, returned pattern ids, agent action (proceeded / cancelled / rewrote).
+
+**Out of scope for Packet 8.** Auto-rewrite without user approval. The check is advisory; the user (or agent) must still confirm.
+
+### 16.3 Empirical motivation
+
+In a single session, the captured PowerShell-quoting pattern would have saved an estimated **~9,000 tokens** if mid-task auto-recall had fired on the first two relapses. Aggregated across the 7 patterns captured this session, mid-task recall would have prevented an estimated **~12,000 of the ~15,200 wasted tokens** (the remaining ~3,000 are first-encounter discovery costs that no recall could avoid).
 
 ---
 
