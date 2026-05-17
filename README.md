@@ -220,6 +220,7 @@ npx vsce package --no-dependencies
 - [ ] Vector semantic search (pgvector)
 - [ ] Automatic pattern capture from git diffs
 - [ ] Team sync / shared PostgreSQL backend
+- [ ] Pro shared databank with moderation and ranking (see `Docs/Build_Packet_6_Pro_Shared_Databank.md`)
 - [ ] Cursor/JetBrains plugins
 
 ---
