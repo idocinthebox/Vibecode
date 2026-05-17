@@ -262,7 +262,12 @@
         },
         "vibeCode.inlineWarnings.minSeverity": {
           "type": "string",
-          "enum": ["low", "medium", "high", "critical"],
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
           "default": "high",
           "description": "Minimum severity for inline warnings."
         },
@@ -367,10 +372,16 @@
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^8.57.0",
     "glob": "^13.0.6",
-    "mocha": "^10.3.0",
+    "mocha": "^11.7.5",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "webpack": "^5.90.0",
     "webpack-cli": "^5.1.4"
+  },
+  "overrides": {
+    "mocha": {
+      "serialize-javascript": "7.0.5",
+      "diff": "8.0.3"
+    }
   }
 }
