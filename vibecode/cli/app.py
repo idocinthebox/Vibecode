@@ -109,7 +109,8 @@ def search(
 
 @app.command()
 def inject(
-    query: str = typer.Option(..., "--query"),
+    query: str | None = typer.Argument(None, help="Task query (positional). Alternative to --query."),
+    query_opt: str | None = typer.Option(None, "--query", help="Task query (named). Alternative to the positional argument."),
     profile: str = typer.Option("generic-agent", "--profile"),
     project: str | None = typer.Option(None, "--project"),
     max_tokens: int | None = typer.Option(None, "--max-tokens"),
@@ -118,7 +119,14 @@ def inject(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Generate agent context markdown for a query."""
-    cmd_inject(query, profile, project, max_tokens, output, copy, json_output)
+    if query and query_opt and query != query_opt:
+        typer.echo("Error: pass the query either positionally or via --query, not both.", err=True)
+        raise typer.Exit(2)
+    resolved = query or query_opt
+    if not resolved:
+        typer.echo("Error: a query is required (positional or --query).", err=True)
+        raise typer.Exit(2)
+    cmd_inject(resolved, profile, project, max_tokens, output, copy, json_output)
 
 
 @app.command("capture-success")

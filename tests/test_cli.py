@@ -55,3 +55,32 @@ def test_report_counts_memories(temp_base: Path) -> None:
         assert "Success patterns" in result.output
         assert "Failure patterns" in result.output
         assert "Project rules" in result.output
+
+
+def test_inject_accepts_positional_query(temp_base: Path) -> None:
+    with patch("vibecode.cli.commands_memory.get_vibecode_dir", return_value=temp_base):
+        result = runner.invoke(app, ["inject", "test query"])
+        # validation passed; downstream may still exit 1 with no profile/db
+        assert "query is required" not in result.output
+        assert "not both" not in result.output
+
+
+def test_inject_accepts_named_query(temp_base: Path) -> None:
+    with patch("vibecode.cli.commands_memory.get_vibecode_dir", return_value=temp_base):
+        result = runner.invoke(app, ["inject", "--query", "test query"])
+        assert "query is required" not in result.output
+        assert "not both" not in result.output
+
+
+def test_inject_rejects_missing_query(temp_base: Path) -> None:
+    with patch("vibecode.cli.commands_memory.get_vibecode_dir", return_value=temp_base):
+        result = runner.invoke(app, ["inject"])
+        assert result.exit_code == 2
+        assert "query is required" in result.output
+
+
+def test_inject_rejects_conflicting_query(temp_base: Path) -> None:
+    with patch("vibecode.cli.commands_memory.get_vibecode_dir", return_value=temp_base):
+        result = runner.invoke(app, ["inject", "a", "--query", "b"])
+        assert result.exit_code == 2
+        assert "not both" in result.output
