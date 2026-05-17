@@ -221,6 +221,7 @@ npx vsce package --no-dependencies
 - [ ] Automatic pattern capture from git diffs
 - [ ] Team sync / shared PostgreSQL backend
 - [ ] Pro shared databank with moderation and ranking (see `Docs/Build_Packet_6_Pro_Shared_Databank.md`)
+- [ ] Unified Packet 6+7 implementation plan (see `Docs/Build_Packet_6_7_Unified.md`)
 - [ ] Cursor/JetBrains plugins
 
 ---
