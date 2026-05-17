@@ -3,7 +3,13 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
+    from pydantic import BaseModel
+
+    BaseSettings = BaseModel  # type: ignore[misc,assignment]
+    SettingsConfigDict = dict  # type: ignore[misc,assignment]
 
 
 class PostgresSettings(BaseSettings):
