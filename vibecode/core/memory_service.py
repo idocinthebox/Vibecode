@@ -3,18 +3,34 @@ from __future__ import annotations
 import sqlite3
 import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from vibecode.config.paths import get_vibecode_dir
 from vibecode.config.settings import get_service_settings
+from vibecode.core.auto_capture_service import AutoCaptureService
+from vibecode.core.edit_attribution import normalize_agent_source
+from vibecode.core.health_service import decay_confidence
+from vibecode.core.outcome_tracker import OutcomeTracker
+from vibecode.core.prevention_service import PreventionService
 from vibecode.core.security import ProjectAllowlist, redact_secrets
 from vibecode.db.sqlite_connection import get_connection, get_db_path
-from vibecode.models import AgentProfile, FailurePattern, ProjectRule, SuccessPattern
+from vibecode.models import (
+    AgentProfile,
+    DiagnosticSignal,
+    EditEvent,
+    FailurePattern,
+    ProjectRule,
+    RevertSignal,
+    SuccessPattern,
+    TerminalSignal,
+    TestSignal,
+)
+from vibecode.repositories.usage_repository import UsageRepository
 from vibecode.services.capture_service import CaptureService
 from vibecode.services.export_service import ExportService
-from vibecode.services.hash_service import HashService
 from vibecode.services.injection_service import InjectionService
 from vibecode.services.search_service import SearchResult, SearchService
 from vibecode.services.token_service import TokenService
@@ -30,6 +46,14 @@ class VibeCodeService:
         self._search: SearchService | None = None
         self._inject: InjectionService | None = None
         self._export: ExportService | None = None
+        self._prevention: PreventionService | None = None
+        self._outcome_tracker = OutcomeTracker(
+            failure_window_sec=self.settings.auto_capture_failure_window_sec,
+            success_window_sec=self.settings.auto_capture_success_window_sec,
+            min_confidence=self.settings.auto_capture_min_confidence,
+        )
+        self._auto_capture: AutoCaptureService | None = None
+        self._pre_edit_check_calls: dict[str, deque[float]] = defaultdict(deque)
 
     @property
     def conn(self) -> sqlite3.Connection | None:
@@ -63,18 +87,38 @@ class VibeCodeService:
             self._export = ExportService(self.base_dir, self.conn)
         return self._export
 
+    @property
+    def prevention(self) -> PreventionService:
+        if self._prevention is None:
+            self._prevention = PreventionService(self.base_dir, self.conn)
+        return self._prevention
+
+    @property
+    def auto_capture(self) -> AutoCaptureService:
+        if self._auto_capture is None:
+            self._auto_capture = AutoCaptureService(
+                capture=self.capture,
+                prevention=self.prevention,
+                require_review=self.settings.auto_capture_require_review,
+            )
+        return self._auto_capture
+
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
     def health_check(self) -> dict[str, Any]:
         db_ok = get_db_path(self.base_dir).exists()
         storage = "sqlite" if db_ok else "json"
+        decayed = 0
+        if self.conn is not None:
+            decayed = decay_confidence(self.conn)
         return {
             "status": "ok",
             "version": "0.3.0",
             "storage_backend": storage,
             "database_ok": db_ok,
             "allowed_projects_count": len(self.allowlist.list()),
+            "decayed_confidence_patterns": decayed,
         }
 
     def search_memory(
@@ -130,6 +174,8 @@ class VibeCodeService:
                 item["source_type"] = r.obj.source_type
             if hasattr(r.obj, "source_ref"):
                 item["source_ref"] = r.obj.source_ref
+            if r.result_type == "failure" and hasattr(r.obj, "corrected_approach"):
+                item["corrected_approach"] = r.obj.corrected_approach
             out.append(item)
 
         return {
@@ -198,6 +244,11 @@ class VibeCodeService:
         tags: list[str] | None = None,
         source_type: str = "manual",
         source_ref: str | None = None,
+        confidence: float | None = None,
+        occurrence_count: int | None = None,
+        last_seen_at: str | None = None,
+        agent_source: str | None = None,
+        review_state: str | None = None,
     ) -> dict[str, Any]:
         if not self.allowlist.is_allowed(project_path):
             return self._error("PROJECT_NOT_ALLOWED", project_path)
@@ -217,6 +268,11 @@ class VibeCodeService:
             "tags": tags or [],
             "source_type": source_type,
             "source_ref": source_ref or "",
+            "confidence": confidence if confidence is not None else 1.0,
+            "occurrence_count": occurrence_count if occurrence_count is not None else 1,
+            "last_seen_at": last_seen_at or self._now(),
+            "agent_source": normalize_agent_source(agent_source or ""),
+            "review_state": review_state or "confirmed",
         }
         pattern, created = self.capture.capture_success(data)
         return {
@@ -240,6 +296,11 @@ class VibeCodeService:
         tags: list[str] | None = None,
         source_type: str = "manual",
         source_ref: str | None = None,
+        confidence: float | None = None,
+        occurrence_count: int | None = None,
+        last_seen_at: str | None = None,
+        agent_source: str | None = None,
+        review_state: str | None = None,
     ) -> dict[str, Any]:
         if not self.allowlist.is_allowed(project_path):
             return self._error("PROJECT_NOT_ALLOWED", project_path)
@@ -257,6 +318,11 @@ class VibeCodeService:
             "tags": tags or [],
             "source_type": source_type,
             "source_ref": source_ref or "",
+            "confidence": confidence if confidence is not None else 1.0,
+            "occurrence_count": occurrence_count if occurrence_count is not None else 1,
+            "last_seen_at": last_seen_at or self._now(),
+            "agent_source": normalize_agent_source(agent_source or ""),
+            "review_state": review_state or "confirmed",
         }
         pattern, created = self.capture.capture_failure(data)
         return {
@@ -295,33 +361,52 @@ class VibeCodeService:
     def get_token_report(self, project_path: str | None = None, days: int = 30) -> dict[str, Any]:
         # Simple report from local data
         if self.conn:
-            cursor = self.conn.execute(
-                "SELECT COUNT(*) AS c FROM success_patterns WHERE is_active = 1"
-            )
+            cursor = self.conn.execute("SELECT COUNT(*) AS c FROM success_patterns WHERE is_active = 1")
             success_count = cursor.fetchone()["c"]
-            cursor = self.conn.execute(
-                "SELECT COUNT(*) AS c FROM failure_patterns WHERE is_active = 1"
-            )
+            cursor = self.conn.execute("SELECT COUNT(*) AS c FROM failure_patterns WHERE is_active = 1")
             failure_count = cursor.fetchone()["c"]
-            cursor = self.conn.execute(
-                "SELECT COUNT(*) AS c FROM project_rules WHERE is_active = 1"
-            )
+            cursor = self.conn.execute("SELECT COUNT(*) AS c FROM project_rules WHERE is_active = 1")
             rule_count = cursor.fetchone()["c"]
             cursor = self.conn.execute(
                 "SELECT COALESCE(SUM(estimated_tokens_saved), 0) AS total FROM success_patterns WHERE is_active = 1"
             )
             total_saved = cursor.fetchone()["total"]
+            cursor = self.conn.execute(
+                "SELECT COUNT(*) AS c FROM success_patterns WHERE is_active = 1 AND source_type LIKE 'auto:%'"
+            )
+            auto_success = cursor.fetchone()["c"]
+            cursor = self.conn.execute(
+                "SELECT COUNT(*) AS c FROM failure_patterns WHERE is_active = 1 AND source_type LIKE 'auto:%'"
+            )
+            auto_failure = cursor.fetchone()["c"]
+            cursor = self.conn.execute("SELECT COUNT(*) AS c FROM usage_events WHERE memory_type = 'prevention_hit'")
+            prevention_hits = cursor.fetchone()["c"]
+            cursor = self.conn.execute(
+                "SELECT COALESCE(SUM(tokens_saved), 0) AS total FROM usage_events WHERE memory_type = 'prevention_hit'"
+            )
+            auto_saved_from_prevention = cursor.fetchone()["total"]
+            cursor = self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_tokens_saved), 0) AS total FROM success_patterns WHERE is_active = 1 AND source_type LIKE 'auto:%'"
+            )
+            auto_saved_from_success = cursor.fetchone()["total"]
+            estimated_tokens_saved_auto = auto_saved_from_prevention + auto_saved_from_success
         else:
             from vibecode.storage.json_store import JsonStore
+
             success_store = JsonStore(self.base_dir / "success_patterns")
             failure_store = JsonStore(self.base_dir / "failure_patterns")
             rule_store = JsonStore(self.base_dir / "project_rules")
             success_count = success_store.count()
             failure_count = failure_store.count()
             rule_count = rule_store.count()
-            total_saved = sum(
-                d.get("estimated_tokens_saved", 0)
+            total_saved = sum(d.get("estimated_tokens_saved", 0) for d in success_store.load_all())
+            auto_success = sum(1 for d in success_store.load_all() if str(d.get("source_type", "")).startswith("auto:"))
+            auto_failure = sum(1 for d in failure_store.load_all() if str(d.get("source_type", "")).startswith("auto:"))
+            prevention_hits = 0
+            estimated_tokens_saved_auto = sum(
+                int(d.get("estimated_tokens_saved", 0))
                 for d in success_store.load_all()
+                if str(d.get("source_type", "")).startswith("auto:")
             )
 
         return {
@@ -329,8 +414,204 @@ class VibeCodeService:
             "failure_patterns": failure_count,
             "project_rules": rule_count,
             "estimated_tokens_saved": total_saved,
+            "auto_captured_success": auto_success,
+            "auto_captured_failure": auto_failure,
+            "prevention_hits": prevention_hits,
+            "estimated_tokens_saved_auto": estimated_tokens_saved_auto,
             "days": days,
         }
+
+    def observe_edit(self, payload: dict[str, Any]) -> dict[str, Any]:
+        event = EditEvent(**payload)
+        if not self.allowlist.is_allowed(event.project_path):
+            return self._error("PROJECT_NOT_ALLOWED", event.project_path)
+
+        if not self.settings.auto_capture_enabled:
+            return {"event_id": event.event_id}
+
+        event.agent_source = normalize_agent_source(event.agent_source)
+        event.text_before = redact_secrets(event.text_before)
+        event.text_after = redact_secrets(event.text_after)
+
+        self._outcome_tracker.track_edit(event)
+        return {"event_id": event.event_id}
+
+    def observe_diagnostic(self, payload: dict[str, Any]) -> None:
+        signal = DiagnosticSignal(**payload)
+        if not self.settings.auto_capture_enabled:
+            return
+        decisions = self._outcome_tracker.apply_diagnostic(signal)
+        self._apply_outcome_decisions(decisions)
+
+    def observe_test(self, payload: dict[str, Any]) -> None:
+        signal = TestSignal(**payload)
+        if not self.settings.auto_capture_enabled:
+            return
+        decisions = self._outcome_tracker.apply_test(signal)
+        self._apply_outcome_decisions(decisions)
+
+    def observe_revert(self, payload: dict[str, Any]) -> None:
+        signal = RevertSignal(**payload)
+        if not self.settings.auto_capture_enabled:
+            return
+        decisions = self._outcome_tracker.apply_revert(signal)
+        self._apply_outcome_decisions(decisions)
+
+    def observe_terminal(self, payload: dict[str, Any]) -> None:
+        signal = TerminalSignal(**payload)
+        if not self.settings.auto_capture_enabled:
+            return
+        decisions = self._outcome_tracker.apply_terminal(signal)
+        self._apply_outcome_decisions(decisions)
+
+    def pre_edit_check(
+        self,
+        project_path: str,
+        file_path: str,
+        language: str,
+        proposed_text: str,
+        task_intent: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.allowlist.is_allowed(project_path):
+            return self._error("PROJECT_NOT_ALLOWED", project_path)
+
+        now_ts = time.time()
+        calls = self._pre_edit_check_calls[project_path]
+        while calls and (now_ts - calls[0]) > 60:
+            calls.popleft()
+
+        if len(calls) >= self.settings.pre_edit_check_rate_limit_per_min:
+            return self._error("RATE_LIMITED", project_path)
+
+        calls.append(now_ts)
+        result = self.prevention.pre_edit_check(
+            project_path=project_path,
+            file_path=file_path,
+            language=language,
+            proposed_text=proposed_text,
+            task_intent=task_intent,
+        )
+
+        if result.get("matches") and self.conn is not None:
+            UsageRepository(self.conn).create(
+                event_id=str(uuid.uuid4()),
+                memory_type="prevention_hit",
+                memory_id=result["matches"][0]["failure_id"],
+                query_text=(task_intent or proposed_text)[:500],
+                tokens_saved=int(result.get("estimated_tokens_saved", 0)),
+            )
+
+        return result
+
+    def get_pending_review(self) -> list[dict[str, Any]]:
+        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+            return []
+
+        pending: list[dict[str, Any]] = []
+        for item in self.capture.failure_repo.list_pending_review(limit=200):
+            pending.append(
+                {
+                    "memory_type": "failure_pattern",
+                    "memory_id": item.failure_id,
+                    "title": item.task_intent,
+                    "summary": item.prevention_rule,
+                    "confidence": float(getattr(item, "confidence", item.confidence_score)),
+                    "occurrence_count": int(getattr(item, "occurrence_count", 1)),
+                    "review_state": item.review_state,
+                    "agent_source": item.agent_source or None,
+                    "last_seen_at": item.last_seen_at,
+                }
+            )
+
+        for item in self.capture.pattern_repo.list_pending_review(limit=200):
+            pending.append(
+                {
+                    "memory_type": "success_pattern",
+                    "memory_id": item.pattern_id,
+                    "title": item.name,
+                    "summary": item.reasoning_summary,
+                    "confidence": float(getattr(item, "confidence", item.confidence_score)),
+                    "occurrence_count": int(getattr(item, "occurrence_count", 1)),
+                    "review_state": item.review_state,
+                    "agent_source": item.agent_source or None,
+                    "last_seen_at": item.last_seen_at,
+                }
+            )
+
+        pending.sort(key=lambda item: item.get("last_seen_at") or "", reverse=True)
+        return pending
+
+    def confirm_review(
+        self,
+        memory_type: str,
+        memory_id: str,
+        edits: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+            return self._error("STORAGE_NOT_INITIALIZED")
+
+        if memory_type == "failure_pattern":
+            item = self.capture.failure_repo.get_by_id(memory_id)
+            if item is None:
+                return self._error("NOT_FOUND")
+            if edits:
+                for key, value in edits.items():
+                    if hasattr(item, key):
+                        setattr(item, key, value)
+                item.updated_at = self._now()
+                self.capture.failure_repo.update(item)
+            self.capture.failure_repo.set_review_state(memory_id, "confirmed")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
+        if memory_type == "success_pattern":
+            item = self.capture.pattern_repo.get_by_id(memory_id)
+            if item is None:
+                return self._error("NOT_FOUND")
+            if edits:
+                for key, value in edits.items():
+                    if hasattr(item, key):
+                        setattr(item, key, value)
+                item.updated_at = self._now()
+                self.capture.pattern_repo.update(item)
+            self.capture.pattern_repo.set_review_state(memory_id, "confirmed")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
+        return self._error("INVALID_MEMORY_TYPE")
+
+    def discard_review(self, memory_type: str, memory_id: str) -> dict[str, Any]:
+        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+            return self._error("STORAGE_NOT_INITIALIZED")
+
+        if memory_type == "failure_pattern":
+            self.capture.failure_repo.set_review_state(memory_id, "discarded")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
+        if memory_type == "success_pattern":
+            self.capture.pattern_repo.set_review_state(memory_id, "discarded")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
+        return self._error("INVALID_MEMORY_TYPE")
+
+    def get_current_context(self) -> dict[str, Any]:
+        context_path = self.base_dir / "agent-context.md"
+        if not context_path.exists():
+            return {"context_markdown": "", "path": str(context_path)}
+        return {
+            "context_markdown": context_path.read_text(encoding="utf-8"),
+            "path": str(context_path),
+        }
+
+    def _apply_outcome_decisions(self, decisions: list[Any]) -> None:
+        for decision in decisions:
+            tracked = decision.tracked
+            source = normalize_agent_source(tracked.edit_event.agent_source)
+            if not source.startswith("agent:"):
+                continue
+            self.auto_capture.on_outcome(
+                tracked=tracked,
+                kind=decision.kind,
+                confidence=decision.confidence,
+            )
 
     @staticmethod
     def _error(code: str, project_path: str | None = None) -> dict[str, Any]:
@@ -342,6 +623,18 @@ class VibeCodeService:
             "STORAGE_NOT_INITIALIZED": (
                 "No VibeCode memory store was found.",
                 "Run: vibecode init or vibecode init-db",
+            ),
+            "RATE_LIMITED": (
+                "Rate limit exceeded for pre-edit checks.",
+                "Reduce call frequency or wait one minute.",
+            ),
+            "NOT_FOUND": (
+                "Requested memory item was not found.",
+                "Refresh pending review and retry.",
+            ),
+            "INVALID_MEMORY_TYPE": (
+                "Unsupported memory type.",
+                "Use success_pattern or failure_pattern.",
             ),
         }
         msg, fix = messages.get(code, ("Unknown error.", ""))

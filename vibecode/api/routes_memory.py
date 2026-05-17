@@ -9,6 +9,7 @@ from vibecode.api.schemas import (
     CaptureSuccessRequest,
     InjectContextRequest,
     InjectContextResponse,
+    PreEditCheckRequest,
     RuleResponse,
     SearchMemoryRequest,
     SearchMemoryResponse,
@@ -66,9 +67,15 @@ def capture_success(request: CaptureSuccessRequest) -> dict:
         tags=request.tags,
         source_type=request.source_type,
         source_ref=request.source_ref,
+        confidence=request.confidence,
+        occurrence_count=request.occurrence_count,
+        last_seen_at=request.last_seen_at,
+        agent_source=request.agent_source,
+        review_state=request.review_state,
     )
     if "error" in result:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail=result)
     return result
 
@@ -89,9 +96,15 @@ def capture_failure(request: CaptureFailureRequest) -> dict:
         tags=request.tags,
         source_type=request.source_type,
         source_ref=request.source_ref,
+        confidence=request.confidence,
+        occurrence_count=request.occurrence_count,
+        last_seen_at=request.last_seen_at,
+        agent_source=request.agent_source,
+        review_state=request.review_state,
     )
     if "error" in result:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail=result)
     return result
 
@@ -109,6 +122,7 @@ def add_rule(request: AddProjectRuleRequest) -> dict:
     )
     if "error" in result:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail=result)
     return result
 
@@ -119,3 +133,19 @@ def token_report(request: TokenReportRequest) -> dict:
         project_path=request.project_path,
         days=request.days,
     )
+
+
+@router.post("/memory/pre-edit-check")
+def pre_edit_check(request: PreEditCheckRequest) -> dict:
+    result = service.pre_edit_check(
+        project_path=request.project_path,
+        file_path=request.file_path,
+        language=request.language,
+        proposed_text=request.proposed_text,
+        task_intent=request.task_intent,
+    )
+    if "error" in result:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=429, detail=result)
+    return result

@@ -26,6 +26,7 @@ class SearchMemoryResult(BaseModel):
     confidence_score: float | None = None
     source_type: str | None = None
     source_ref: str | None = None
+    corrected_approach: str | None = None
 
 
 class SearchMemoryResponse(BaseModel):
@@ -68,6 +69,11 @@ class CaptureSuccessRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     source_type: str = "manual"
     source_ref: str | None = None
+    confidence: float | None = None
+    occurrence_count: int | None = None
+    last_seen_at: str | None = None
+    agent_source: str | None = None
+    review_state: Literal["pending", "confirmed", "discarded"] | None = None
 
 
 class CaptureFailureRequest(BaseModel):
@@ -84,6 +90,11 @@ class CaptureFailureRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     source_type: str = "manual"
     source_ref: str | None = None
+    confidence: float | None = None
+    occurrence_count: int | None = None
+    last_seen_at: str | None = None
+    agent_source: str | None = None
+    review_state: Literal["pending", "confirmed", "discarded"] | None = None
 
 
 class AddProjectRuleRequest(BaseModel):
@@ -119,7 +130,94 @@ class TokenReportResponse(BaseModel):
     failure_patterns: int
     project_rules: int
     estimated_tokens_saved: int
+    auto_captured_success: int
+    auto_captured_failure: int
+    prevention_hits: int
+    estimated_tokens_saved_auto: int
     days: int
+
+
+class EditRangeRequest(BaseModel):
+    start_line: int = 0
+    start_character: int = 0
+    end_line: int = 0
+    end_character: int = 0
+
+
+class EditEventRequest(BaseModel):
+    event_id: str
+    project_path: str
+    file_path: str
+    language: str = ""
+    agent_source: str = "unknown"
+    range: EditRangeRequest = Field(default_factory=EditRangeRequest)
+    text_before: str = ""
+    text_after: str = ""
+    timestamp: float
+    document_version: int = 0
+
+
+class DiagnosticSignalRequest(BaseModel):
+    project_path: str
+    file_path: str
+    message: str = ""
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    is_new: bool = False
+    is_resolved: bool = False
+    timestamp: float
+
+
+class TestSignalRequest(BaseModel):
+    project_path: str
+    status_before: Literal["pass", "fail", "unknown"] = "unknown"
+    status_after: Literal["pass", "fail", "unknown"] = "unknown"
+    test_name: str = ""
+    file_path: str = ""
+    timestamp: float
+
+
+class RevertSignalRequest(BaseModel):
+    project_path: str
+    event_id: str
+    reverted_to_text: str = ""
+    timestamp: float
+
+
+class TerminalSignalRequest(BaseModel):
+    project_path: str
+    cwd: str
+    command: str
+    exit_code: int
+    ended_at: float
+
+
+class ObserveEditResponse(BaseModel):
+    event_id: str
+
+
+class PendingReviewItem(BaseModel):
+    memory_type: Literal["success_pattern", "failure_pattern"]
+    memory_id: str
+    title: str
+    summary: str
+    confidence: float
+    occurrence_count: int
+    review_state: str
+    agent_source: str | None = None
+    last_seen_at: str | None = None
+
+
+class ConfirmReviewRequest(BaseModel):
+    memory_type: Literal["success_pattern", "failure_pattern"]
+    edits: dict | None = None
+
+
+class PreEditCheckRequest(BaseModel):
+    project_path: str
+    file_path: str
+    language: str
+    proposed_text: str
+    task_intent: str | None = None
 
 
 class HealthResponse(BaseModel):
