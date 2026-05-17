@@ -35,6 +35,7 @@ class ProjectAllowlist:
     def __init__(self, vibecode_dir: Path) -> None:
         self.vibecode_dir = vibecode_dir
         self._path = vibecode_dir / "allowed_projects.json"
+        self._cache: list[str] | None = None
 
     def _load(self) -> dict:
         if not self._path.exists():
@@ -45,9 +46,12 @@ class ProjectAllowlist:
     def _save(self, data: dict) -> None:
         with open(self._path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        self._cache = None  # invalidate
 
     def list(self) -> list[str]:
-        return self._load().get("allowed_projects", [])
+        if self._cache is None:
+            self._cache = self._load().get("allowed_projects", [])
+        return self._cache
 
     def add(self, path: str) -> None:
         data = self._load()
@@ -69,8 +73,9 @@ class ProjectAllowlist:
         allowed = self.list()
         if not allowed:
             return False
-        resolved = str(Path(path).resolve())
+        resolved = Path(path).resolve()
         for a in allowed:
-            if resolved == a or resolved.startswith(a + "\\") or resolved.startswith(a + "/"):
+            a_path = Path(a)
+            if resolved == a_path or resolved.is_relative_to(a_path):
                 return True
         return False

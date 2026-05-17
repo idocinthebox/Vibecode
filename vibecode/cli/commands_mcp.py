@@ -9,8 +9,7 @@ def cmd_mcp_start() -> None:
     from vibecode.mcp.server import run_mcp_server
 
     print_info("Starting VibeCode MCP server (stdio)...")
-    import asyncio
-    asyncio.run(run_mcp_server())
+    run_mcp_server()
 
 
 def cmd_mcp_doctor() -> None:
@@ -41,3 +40,9 @@ def cmd_mcp_write_antigravity_config() -> None:
     from vibecode.integrations.antigravity import write_agents_md
     path = write_agents_md()
     print_success(f"Antigravity AGENTS.md written: {path}")
+
+
+def cmd_mcp_write_kimi_config() -> None:
+    from vibecode.integrations.kimi import write_kimi_config
+    path = write_kimi_config()
+    print_success(f"Kimi MCP config written: {path}")

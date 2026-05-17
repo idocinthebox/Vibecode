@@ -19,6 +19,7 @@ from vibecode.cli.commands_mcp import (
     cmd_mcp_start,
     cmd_mcp_write_antigravity_config,
     cmd_mcp_write_cursor_config,
+    cmd_mcp_write_kimi_config,
 )
 from vibecode.cli.commands_project import cmd_project_allow, cmd_project_list, cmd_project_remove
 from vibecode.cli.commands_report import cmd_report
@@ -309,6 +310,12 @@ def mcp_write_cursor_config() -> None:
 def mcp_write_antigravity_config() -> None:
     """Write Antigravity AGENTS.md configuration."""
     cmd_mcp_write_antigravity_config()
+
+
+@mcp_app.command("write-kimi-config")
+def mcp_write_kimi_config() -> None:
+    """Write Kimi MCP configuration."""
+    cmd_mcp_write_kimi_config()
 
 
 # ---------------------------------------------------------------------------

@@ -159,6 +159,13 @@ class CaptureService:
                 "max_context_tokens": 1500,
                 "template_path": "templates/generic_agent.md",
             },
+            {
+                "profile_id": str(uuid.uuid4()),
+                "name": "kimi-build",
+                "target_agent": "Kimi 2.6",
+                "max_context_tokens": 200000,
+                "template_path": "templates/kimi_build.md",
+            },
         ]
         for p in profiles:
             p.setdefault("created_at", self._now())

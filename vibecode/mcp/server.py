@@ -89,4 +89,4 @@ def vibecode_health_check() -> str:
 
 
 def run_mcp_server() -> None:
-    mcp.run_stdio_async()
+    mcp.run()

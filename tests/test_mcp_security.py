@@ -12,7 +12,5 @@ def test_mcp_capture_failure_rejects_unallowed_project() -> None:
         failure_reason="Broke",
         prevention_rule="No",
     )
-    import json
-    data = json.loads(result)
-    assert "error" in data
-    assert data["error"] == "PROJECT_NOT_ALLOWED"
+    assert "error" in result
+    assert result["error"] == "PROJECT_NOT_ALLOWED"

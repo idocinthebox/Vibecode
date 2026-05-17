@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -42,8 +41,7 @@ def test_mcp_search_memory_tool() -> None:
         result = tools.search_memory("test")
         if tools.service.conn:
             tools.service.conn.close()
-        data = json.loads(result)
-        assert len(data["results"]) >= 1
+        assert len(result["results"]) >= 1
 
 
 def test_mcp_inject_context_tool() -> None:
@@ -83,8 +81,7 @@ def test_mcp_inject_context_tool() -> None:
         result = tools.inject_context("audio", agent_profile="generic-agent")
         if tools.service.conn:
             tools.service.conn.close()
-        data = json.loads(result)
-        assert "VibeCode Agent Context" in data["context_markdown"]
+        assert "VibeCode Agent Context" in result["context_markdown"]
 
 
 def test_mcp_capture_failure_tool() -> None:
@@ -122,5 +119,4 @@ def test_mcp_capture_failure_tool() -> None:
         )
         if tools.service.conn:
             tools.service.conn.close()
-        data = json.loads(result)
-        assert "failure_id" in data
+        assert "failure_id" in result
