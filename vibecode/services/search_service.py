@@ -56,7 +56,9 @@ class SearchResult:
 
     @property
     def confidence_score(self) -> float:
-        return getattr(self.obj, "confidence_score", 1.0)
+        if hasattr(self.obj, "confidence"):
+            return float(getattr(self.obj, "confidence", 1.0))
+        return float(getattr(self.obj, "confidence_score", 1.0))
 
     @property
     def tokens_estimate(self) -> int:
@@ -78,8 +80,7 @@ class SearchResult:
         rank = severity_order.get(self.severity, 3)
         type_order = {"failure": 0, "rule": 1, "success": 2}
         type_rank = type_order.get(self.result_type, 3)
-        # Higher confidence first for successes
-        conf = -self.confidence_score if self.result_type == "success" else 0.0
+        conf = -self.confidence_score
         return (rank, type_rank, conf)
 
 
@@ -157,9 +158,7 @@ class SearchService:
         text_lower = text.lower()
         return [t for t in terms if t in text_lower]
 
-    def _match_success(
-        self, pattern: SuccessPattern, terms: list[str]
-    ) -> list[str]:
+    def _match_success(self, pattern: SuccessPattern, terms: list[str]) -> list[str]:
         fields = [
             pattern.name,
             pattern.intent_description,
@@ -174,9 +173,7 @@ class SearchService:
             matched.update(self._match_terms(field, terms))
         return list(matched)
 
-    def _match_failure(
-        self, pattern: FailurePattern, terms: list[str]
-    ) -> list[str]:
+    def _match_failure(self, pattern: FailurePattern, terms: list[str]) -> list[str]:
         fields = [
             pattern.task_intent,
             pattern.bad_suggestion,

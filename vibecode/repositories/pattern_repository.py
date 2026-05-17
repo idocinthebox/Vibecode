@@ -19,9 +19,10 @@ class PatternRepository:
             code_before, code_after, diff, explanation,
             token_cost_original, token_cost_retrieval, estimated_tokens_saved,
             confidence_score, usage_count, success_rate,
+            confidence, occurrence_count, last_seen_at, agent_source, review_state,
             source_type, source_ref, source_commit, source_file_path, content_hash,
             is_active, created_at, updated_at, last_used
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(
             sql,
@@ -48,6 +49,11 @@ class PatternRepository:
                 pattern.confidence_score,
                 pattern.usage_count,
                 pattern.success_rate,
+                pattern.confidence,
+                pattern.occurrence_count,
+                pattern.last_seen_at,
+                pattern.agent_source,
+                pattern.review_state,
                 pattern.source_type,
                 pattern.source_ref,
                 pattern.source_commit,
@@ -62,16 +68,26 @@ class PatternRepository:
         self.conn.commit()
 
     def get_by_id(self, pattern_id: str) -> SuccessPattern | None:
-        row = self.conn.execute(
-            "SELECT * FROM success_patterns WHERE pattern_id = ?", (pattern_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM success_patterns WHERE pattern_id = ?", (pattern_id,)).fetchone()
         if not row:
             return None
         return self._row_to_pattern(row)
 
     def list_active(self) -> list[SuccessPattern]:
         rows = self.conn.execute(
-            "SELECT * FROM success_patterns WHERE is_active = 1"
+            "SELECT * FROM success_patterns WHERE is_active = 1 AND review_state != 'discarded'"
+        ).fetchall()
+        return [self._row_to_pattern(r) for r in rows]
+
+    def list_pending_review(self, limit: int = 100) -> list[SuccessPattern]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM success_patterns
+            WHERE is_active = 1 AND review_state = 'pending'
+            ORDER BY COALESCE(last_seen_at, updated_at) DESC
+            LIMIT ?
+            """,
+            (limit,),
         ).fetchall()
         return [self._row_to_pattern(r) for r in rows]
 
@@ -80,7 +96,7 @@ class PatternRepository:
         rows = self.conn.execute(
             """
             SELECT * FROM success_patterns
-            WHERE is_active = 1 AND (
+            WHERE is_active = 1 AND review_state != 'discarded' AND (
                 name LIKE ? OR intent_description LIKE ? OR language LIKE ?
                 OR framework LIKE ? OR reasoning_summary LIKE ?
                 OR tags_json LIKE ? OR affected_files_json LIKE ?
@@ -98,6 +114,7 @@ class PatternRepository:
             reasoning_steps_json = ?, code_before = ?, code_after = ?, diff = ?, explanation = ?,
             token_cost_original = ?, token_cost_retrieval = ?, estimated_tokens_saved = ?,
             confidence_score = ?, usage_count = ?, success_rate = ?,
+            confidence = ?, occurrence_count = ?, last_seen_at = ?, agent_source = ?, review_state = ?,
             source_type = ?, source_ref = ?, source_commit = ?, source_file_path = ?, content_hash = ?,
             is_active = ?, updated_at = ?, last_used = ?
         WHERE pattern_id = ?
@@ -125,6 +142,11 @@ class PatternRepository:
                 pattern.confidence_score,
                 pattern.usage_count,
                 pattern.success_rate,
+                pattern.confidence,
+                pattern.occurrence_count,
+                pattern.last_seen_at,
+                pattern.agent_source,
+                pattern.review_state,
                 pattern.source_type,
                 pattern.source_ref,
                 pattern.source_commit,
@@ -146,9 +168,7 @@ class PatternRepository:
         self.conn.commit()
 
     def hard_delete_for_tests_only(self, pattern_id: str) -> None:
-        self.conn.execute(
-            "DELETE FROM success_patterns WHERE pattern_id = ?", (pattern_id,)
-        )
+        self.conn.execute("DELETE FROM success_patterns WHERE pattern_id = ?", (pattern_id,))
         self.conn.commit()
 
     def get_by_content_hash(self, content_hash: str) -> SuccessPattern | None:
@@ -159,6 +179,44 @@ class PatternRepository:
         if not row:
             return None
         return self._row_to_pattern(row)
+
+    def set_review_state(self, pattern_id: str, review_state: str) -> None:
+        self.conn.execute(
+            "UPDATE success_patterns SET review_state = ?, updated_at = datetime('now') WHERE pattern_id = ?",
+            (review_state, pattern_id),
+        )
+        self.conn.commit()
+
+    def mark_seen(self, pattern_id: str, confidence: float | None = None, seen_at: str | None = None) -> None:
+        if seen_at is None:
+            seen_at_expr = "datetime('now')"
+            seen_params: tuple[Any, ...] = ()
+        else:
+            seen_at_expr = "?"
+            seen_params = (seen_at,)
+
+        if confidence is None:
+            sql = f"""
+            UPDATE success_patterns SET
+                occurrence_count = occurrence_count + 1,
+                last_seen_at = {seen_at_expr},
+                updated_at = datetime('now')
+            WHERE pattern_id = ?
+            """
+            params = (*seen_params, pattern_id)
+        else:
+            sql = f"""
+            UPDATE success_patterns SET
+                occurrence_count = occurrence_count + 1,
+                last_seen_at = {seen_at_expr},
+                confidence = CASE WHEN confidence < ? THEN ? ELSE confidence END,
+                updated_at = datetime('now')
+            WHERE pattern_id = ?
+            """
+            params = (*seen_params, confidence, confidence, pattern_id)
+
+        self.conn.execute(sql, params)
+        self.conn.commit()
 
     @staticmethod
     def _row_to_pattern(row: sqlite3.Row) -> SuccessPattern:

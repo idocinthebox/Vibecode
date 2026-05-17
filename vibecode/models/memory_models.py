@@ -36,6 +36,11 @@ class SuccessPattern(BaseModel):
     confidence_score: float = 1.0
     usage_count: int = 0
     success_rate: float = 1.0
+    confidence: float = 1.0
+    occurrence_count: int = 1
+    last_seen_at: str | None = None
+    agent_source: str = ""
+    review_state: str = "confirmed"
 
     source_type: str = "manual"
     source_ref: str = ""
@@ -54,6 +59,14 @@ class SuccessPattern(BaseModel):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v or []
+
+    @field_validator("review_state")
+    @classmethod
+    def _valid_review_state(cls, v: str) -> str:
+        allowed = {"pending", "confirmed", "discarded"}
+        if v not in allowed:
+            raise ValueError(f"review_state must be one of {allowed}")
+        return v
 
     def to_json(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
@@ -79,6 +92,11 @@ class FailurePattern(BaseModel):
     severity: str
     confidence_score: float = 1.0
     usage_count: int = 0
+    confidence: float = 1.0
+    occurrence_count: int = 1
+    last_seen_at: str | None = None
+    agent_source: str = ""
+    review_state: str = "confirmed"
 
     source_type: str = "manual"
     source_ref: str = ""
@@ -97,6 +115,14 @@ class FailurePattern(BaseModel):
         allowed = {"low", "medium", "high", "critical"}
         if v not in allowed:
             raise ValueError(f"severity must be one of {allowed}")
+        return v
+
+    @field_validator("review_state")
+    @classmethod
+    def _valid_review_state(cls, v: str) -> str:
+        allowed = {"pending", "confirmed", "discarded"}
+        if v not in allowed:
+            raise ValueError(f"review_state must be one of {allowed}")
         return v
 
     @field_validator("tags", "affected_files", mode="before")

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-import sqlite3
 
 from vibecode.models import AgentProfile, FailurePattern, ProjectRule, SuccessPattern
 from vibecode.repositories.agent_profile_repository import AgentProfileRepository
@@ -39,13 +38,16 @@ class CaptureService:
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    def capture_success(
-        self, data: dict[str, Any]
-    ) -> tuple[SuccessPattern, bool]:
+    def capture_success(self, data: dict[str, Any]) -> tuple[SuccessPattern, bool]:
         pattern_id = str(uuid.uuid4())
         data["pattern_id"] = pattern_id
         data.setdefault("created_at", self._now())
         data["updated_at"] = self._now()
+        data.setdefault("confidence", 1.0)
+        data.setdefault("occurrence_count", 1)
+        data.setdefault("last_seen_at", data["updated_at"])
+        data.setdefault("agent_source", "")
+        data.setdefault("review_state", "confirmed")
 
         pattern = SuccessPattern(**data)
         pattern.content_hash = HashService.hash_success_pattern(pattern)
@@ -54,11 +56,17 @@ class CaptureService:
         if self.pattern_repo:
             existing = self.pattern_repo.get_by_content_hash(pattern.content_hash)
             if existing:
+                self.pattern_repo.mark_seen(
+                    existing.pattern_id,
+                    confidence=data.get("confidence"),
+                    seen_at=self._now(),
+                )
+                refreshed = self.pattern_repo.get_by_id(existing.pattern_id)
+                if refreshed:
+                    return refreshed, False
                 return existing, False
         else:
-            existing = self._find_by_hash(
-                self.success_store, "content_hash", pattern.content_hash
-            )
+            existing = self._find_by_hash(self.success_store, "content_hash", pattern.content_hash)
             if existing:
                 return SuccessPattern.from_json(existing), False
 
@@ -66,14 +74,10 @@ class CaptureService:
         original = pattern.token_cost_original or TokenService.estimate_tokens(
             pattern.original_prompt + pattern.reasoning_summary
         )
-        retrieval = pattern.token_cost_retrieval or TokenService.estimate_tokens(
-            pattern.reasoning_summary
-        )
+        retrieval = pattern.token_cost_retrieval or TokenService.estimate_tokens(pattern.reasoning_summary)
         pattern.token_cost_original = original
         pattern.token_cost_retrieval = retrieval
-        pattern.estimated_tokens_saved = TokenService.estimate_tokens_saved(
-            original, retrieval
-        )
+        pattern.estimated_tokens_saved = TokenService.estimate_tokens_saved(original, retrieval)
 
         if self.pattern_repo:
             self.pattern_repo.create(pattern)
@@ -81,13 +85,16 @@ class CaptureService:
             self.success_store.save(pattern_id, pattern.to_json())
         return pattern, True
 
-    def capture_failure(
-        self, data: dict[str, Any]
-    ) -> tuple[FailurePattern, bool]:
+    def capture_failure(self, data: dict[str, Any]) -> tuple[FailurePattern, bool]:
         failure_id = str(uuid.uuid4())
         data["failure_id"] = failure_id
         data.setdefault("created_at", self._now())
         data["updated_at"] = self._now()
+        data.setdefault("confidence", 1.0)
+        data.setdefault("occurrence_count", 1)
+        data.setdefault("last_seen_at", data["updated_at"])
+        data.setdefault("agent_source", "")
+        data.setdefault("review_state", "confirmed")
 
         pattern = FailurePattern(**data)
         pattern.content_hash = HashService.hash_failure_pattern(pattern)
@@ -95,11 +102,17 @@ class CaptureService:
         if self.failure_repo:
             existing = self.failure_repo.get_by_content_hash(pattern.content_hash)
             if existing:
+                self.failure_repo.mark_seen(
+                    existing.failure_id,
+                    confidence=data.get("confidence"),
+                    seen_at=self._now(),
+                )
+                refreshed = self.failure_repo.get_by_id(existing.failure_id)
+                if refreshed:
+                    return refreshed, False
                 return existing, False
         else:
-            existing = self._find_by_hash(
-                self.failure_store, "content_hash", pattern.content_hash
-            )
+            existing = self._find_by_hash(self.failure_store, "content_hash", pattern.content_hash)
             if existing:
                 return FailurePattern.from_json(existing), False
 

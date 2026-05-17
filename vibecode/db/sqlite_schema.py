@@ -40,6 +40,11 @@ CREATE TABLE IF NOT EXISTS success_patterns (
     confidence_score REAL NOT NULL DEFAULT 1.0,
     usage_count INTEGER NOT NULL DEFAULT 0,
     success_rate REAL NOT NULL DEFAULT 1.0,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    occurrence_count INTEGER NOT NULL DEFAULT 1,
+    last_seen_at TEXT,
+    agent_source TEXT,
+    review_state TEXT NOT NULL DEFAULT 'confirmed',
     source_type TEXT,
     source_ref TEXT,
     source_commit TEXT,
@@ -63,6 +68,12 @@ ON success_patterns(content_hash);
 CREATE INDEX IF NOT EXISTS idx_success_patterns_last_used
 ON success_patterns(last_used);
 
+CREATE INDEX IF NOT EXISTS idx_success_patterns_review_state
+ON success_patterns(review_state);
+
+CREATE INDEX IF NOT EXISTS idx_success_patterns_confidence
+ON success_patterns(confidence DESC, last_seen_at DESC);
+
 CREATE TABLE IF NOT EXISTS failure_patterns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     failure_id TEXT NOT NULL UNIQUE,
@@ -79,6 +90,11 @@ CREATE TABLE IF NOT EXISTS failure_patterns (
     severity TEXT NOT NULL DEFAULT 'medium',
     confidence_score REAL NOT NULL DEFAULT 1.0,
     usage_count INTEGER NOT NULL DEFAULT 0,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    occurrence_count INTEGER NOT NULL DEFAULT 1,
+    last_seen_at TEXT,
+    agent_source TEXT,
+    review_state TEXT NOT NULL DEFAULT 'confirmed',
     source_type TEXT,
     source_ref TEXT,
     source_commit TEXT,
@@ -101,6 +117,12 @@ ON failure_patterns(severity);
 
 CREATE INDEX IF NOT EXISTS idx_failure_patterns_content_hash
 ON failure_patterns(content_hash);
+
+CREATE INDEX IF NOT EXISTS idx_failure_patterns_review_state
+ON failure_patterns(review_state);
+
+CREATE INDEX IF NOT EXISTS idx_failure_patterns_confidence
+ON failure_patterns(confidence DESC, last_seen_at DESC);
 
 CREATE TABLE IF NOT EXISTS project_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
