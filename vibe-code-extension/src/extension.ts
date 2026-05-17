@@ -11,6 +11,7 @@ import { AgentDetectionService } from './services/agentDetectionService';
 import { AutoCorrectService } from './services/autoCorrectService';
 import { EditAttributionService } from './services/editAttributionService';
 import { OutcomeObserverService } from './services/outcomeObserverService';
+import { RulesInstallerService } from './services/rulesInstallerService';
 import { StatusBarManager } from './ui/statusBar';
 import { getLogger, resetLogger } from './ui/outputChannel';
 import { MemoryTreeProvider } from './views/memoryTreeProvider';
@@ -37,6 +38,7 @@ import { registerSearchRelatedMemoryCommand } from './commands/searchRelatedMemo
 import { registerConfirmAutoCaptureCommand } from './commands/confirmAutoCaptureCommand';
 import { registerDiscardAutoCaptureCommand } from './commands/discardAutoCaptureCommand';
 import { registerOpenReviewQueueCommand } from './commands/openReviewQueueCommand';
+import { registerInstallAgentRulesCommand } from './commands/installAgentRulesCommand';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = getLogger();
@@ -195,6 +197,13 @@ export function activate(context: vscode.ExtensionContext): void {
     registerDiscardAutoCaptureCommand(context, api, reviewProvider),
     registerOpenReviewQueueCommand(context, reviewProvider),
   ];
+
+  // Agent rules installer (prompt-once per workspace by default).
+  const rulesInstaller = new RulesInstallerService(workspace, context);
+  disposables.push(registerInstallAgentRulesCommand(context, rulesInstaller));
+  rulesInstaller.maybeInstallOnActivation().catch((err) => {
+    logger.warn(`Rules installer failed: ${err}`);
+  });
 
   disposables.forEach((d) => context.subscriptions.push(d));
   logger.info('VibeCode extension activated');

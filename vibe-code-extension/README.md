@@ -9,6 +9,12 @@ Thin client for the VibeCode local AI coding memory service.
 - Pending review queue sidebar for confirm/discard flows
 - Auto-correct context writer to `.vibecode/agent-context.md` when agent sessions start
 - Corrected-approach quick fix when a diagnostic includes a known fix snippet
+- **Agent instructions installer** — on first activation in a workspace, prompts
+  to add a VibeCode usage block to `.github/copilot-instructions.md`,
+  `CLAUDE.md`, `.cursor/rules/vibecode.md`, `.windsurfrules`, and `AGENTS.md`.
+  Idempotent (delimited by `<!-- vibecode:begin -->` markers) and backs up any
+  existing files to `*.bak`. Controlled by `vibeCode.agentInstructions.autoInstall`
+  (`prompt` | `always` | `never`) and `vibeCode.agentInstructions.targets`.
 
 ## Requirements
 
@@ -26,6 +32,7 @@ Thin client for the VibeCode local AI coding memory service.
 | `VibeCode: Confirm Auto-Captured Pattern` | Confirm an item in the pending review queue |
 | `VibeCode: Discard Auto-Captured Pattern` | Discard an item in the pending review queue |
 | `VibeCode: Open Auto-Capture Review Queue` | Focus the pending review sidebar |
+| `VibeCode: Install Agent Instructions in Workspace` | Add/merge VibeCode usage rules into Copilot/Claude/Cursor/Windsurf/AGENTS files |
 | `VibeCode: Check VibeCode Service Status` | Check local service health |
 | `VibeCode: Open VibeCode Settings` | Open extension settings |
 

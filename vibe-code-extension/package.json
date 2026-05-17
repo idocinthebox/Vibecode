@@ -2,7 +2,7 @@
   "name": "vibe-code",
   "displayName": "VibeCode",
   "description": "Token-efficient AI coding memory for VSCode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vibecode",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:vibeCode.searchMemory",
     "onCommand:vibeCode.injectContext",
     "onCommand:vibeCode.captureSuccess",
@@ -29,6 +30,7 @@
     "onCommand:vibeCode.confirmAutoCapture",
     "onCommand:vibeCode.discardAutoCapture",
     "onCommand:vibeCode.openReviewQueue",
+    "onCommand:vibeCode.installAgentInstructions",
     "onCommand:vibeCode.serviceStatus",
     "onView:vibeCodeMemory",
     "onView:vibeCodeReviewQueue",
@@ -132,6 +134,12 @@
         "title": "Open Auto-Capture Review Queue",
         "category": "VibeCode",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "vibeCode.installAgentInstructions",
+        "title": "Install Agent Instructions in Workspace",
+        "category": "VibeCode",
+        "icon": "$(book)"
       }
     ],
     "menus": {
@@ -359,6 +367,21 @@
             "anthropic.claude-code"
           ],
           "description": "Extension IDs treated as AI coding agents for edit attribution."
+        },
+        "vibeCode.agentInstructions.autoInstall": {
+          "type": "string",
+          "enum": ["prompt", "always", "never"],
+          "default": "prompt",
+          "description": "How VibeCode installs its usage instructions into agent rule files (Copilot, Claude, Cursor, etc.) on activation. 'prompt' asks once per workspace; 'always' installs silently and re-checks each activation (idempotent); 'never' disables."
+        },
+        "vibeCode.agentInstructions.targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["copilot", "claude", "cursor", "windsurf", "agents"]
+          },
+          "default": ["copilot", "claude", "cursor", "windsurf", "agents"],
+          "description": "Which agent rule files to write/merge VibeCode instructions into."
         }
       }
     }
