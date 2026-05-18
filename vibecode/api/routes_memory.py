@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from vibecode.api.schemas import (
     AddProjectRuleRequest,
@@ -19,11 +19,15 @@ from vibecode.api.schemas import (
 from vibecode.core.memory_service import VibeCodeService
 
 router = APIRouter()
-service = VibeCodeService()
+
+
+def get_service() -> VibeCodeService:
+    """FastAPI dependency: instantiate service per-request to avoid SQLite threading issues."""
+    return VibeCodeService()
 
 
 @router.post("/memory/search", response_model=SearchMemoryResponse)
-def search_memory(request: SearchMemoryRequest) -> dict:
+def search_memory(request: SearchMemoryRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     return service.search_memory(
         query=request.query,
         project_path=request.project_path,
@@ -37,7 +41,7 @@ def search_memory(request: SearchMemoryRequest) -> dict:
 
 
 @router.post("/memory/inject", response_model=InjectContextResponse)
-def inject_context(request: InjectContextRequest) -> dict:
+def inject_context(request: InjectContextRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     return service.inject_context(
         query=request.query,
         project_path=request.project_path,
@@ -50,7 +54,7 @@ def inject_context(request: InjectContextRequest) -> dict:
 
 
 @router.post("/memory/capture-success", response_model=CaptureResponse)
-def capture_success(request: CaptureSuccessRequest) -> dict:
+def capture_success(request: CaptureSuccessRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     result = service.capture_success(
         project_path=request.project_path,
         name=request.name,
@@ -81,7 +85,7 @@ def capture_success(request: CaptureSuccessRequest) -> dict:
 
 
 @router.post("/memory/capture-failure", response_model=CaptureResponse)
-def capture_failure(request: CaptureFailureRequest) -> dict:
+def capture_failure(request: CaptureFailureRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     result = service.capture_failure(
         project_path=request.project_path,
         task_intent=request.task_intent,
@@ -110,7 +114,7 @@ def capture_failure(request: CaptureFailureRequest) -> dict:
 
 
 @router.post("/rules/add", response_model=RuleResponse)
-def add_rule(request: AddProjectRuleRequest) -> dict:
+def add_rule(request: AddProjectRuleRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     result = service.add_project_rule(
         project_path=request.project_path,
         rule_text=request.rule_text,
@@ -128,7 +132,7 @@ def add_rule(request: AddProjectRuleRequest) -> dict:
 
 
 @router.post("/reports/tokens", response_model=TokenReportResponse)
-def token_report(request: TokenReportRequest) -> dict:
+def token_report(request: TokenReportRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     return service.get_token_report(
         project_path=request.project_path,
         days=request.days,
@@ -136,7 +140,7 @@ def token_report(request: TokenReportRequest) -> dict:
 
 
 @router.post("/memory/pre-edit-check")
-def pre_edit_check(request: PreEditCheckRequest) -> dict:
+def pre_edit_check(request: PreEditCheckRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     result = service.pre_edit_check(
         project_path=request.project_path,
         file_path=request.file_path,
