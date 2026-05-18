@@ -44,6 +44,8 @@ class SuccessPattern(BaseModel):
 
     source_type: str = "manual"
     source_ref: str = ""
+    harvest_meta: dict[str, Any] = Field(default_factory=dict)
+    shared_publication_id: str | None = None
     source_commit: str = ""
     source_file_path: str = ""
     content_hash: str = ""
@@ -100,6 +102,8 @@ class FailurePattern(BaseModel):
 
     source_type: str = "manual"
     source_ref: str = ""
+    harvest_meta: dict[str, Any] = Field(default_factory=dict)
+    shared_publication_id: str | None = None
     source_commit: str = ""
     source_file_path: str = ""
     content_hash: str = ""
@@ -149,6 +153,11 @@ class ProjectRule(BaseModel):
 
     source_success_pattern_id: str = ""
     source_failure_id: str = ""
+    source_type: str = "manual"
+    source_ref: str = ""
+    harvest_meta: dict[str, Any] = Field(default_factory=dict)
+    review_state: str = "confirmed"
+    shared_publication_id: str | None = None
 
     created_at: str = Field(default_factory=utc_now)
     updated_at: str = Field(default_factory=utc_now)
@@ -179,6 +188,14 @@ class ProjectRule(BaseModel):
         }
         if v not in allowed:
             raise ValueError(f"rule_type must be one of {allowed}")
+        return v
+
+    @field_validator("review_state")
+    @classmethod
+    def _valid_review_state(cls, v: str) -> str:
+        allowed = {"pending", "confirmed", "discarded"}
+        if v not in allowed:
+            raise ValueError(f"review_state must be one of {allowed}")
         return v
 
     @field_validator("tags", mode="before")

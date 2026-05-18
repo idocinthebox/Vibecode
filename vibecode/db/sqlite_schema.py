@@ -134,10 +134,49 @@ CREATE TABLE IF NOT EXISTS project_rules (
     source_success_pattern_id TEXT,
     source_failure_id TEXT,
     tags_json TEXT NOT NULL DEFAULT '[]',
+    source_type TEXT NOT NULL DEFAULT 'manual',
+    source_ref TEXT,
+    harvest_meta TEXT NOT NULL DEFAULT '{}',
+    review_state TEXT NOT NULL DEFAULT 'confirmed',
+    shared_publication_id TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_project_rules_review_state
+ON project_rules(review_state);
+
+CREATE TABLE IF NOT EXISTS shared_publications (
+    id TEXT PRIMARY KEY,
+    local_pattern_id TEXT NOT NULL,
+    memory_type TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    submission_id TEXT NOT NULL,
+    moderation_state TEXT NOT NULL,
+    published_at TEXT,
+    retracted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_publications_local_pattern
+ON shared_publications(local_pattern_id);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    ts TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    project_path TEXT,
+    meta TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_action
+ON audit_log(actor, action, ts DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_target
+ON audit_log(target_type, target_id, ts DESC);
 
 CREATE TABLE IF NOT EXISTS agent_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,6 +211,116 @@ CREATE TABLE IF NOT EXISTS usage_events (
 """
 
 
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row["name"] for row in rows}
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    ddl: str,
+) -> None:
+    # Safe to call before the table exists: silently skip in that case so
+    # this helper can run BEFORE executescript on a pre-existing DB.
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    if not exists:
+        return
+    columns = _table_columns(conn, table_name)
+    if column_name not in columns:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
+
+
+def _ensure_phase0_columns(conn: sqlite3.Connection) -> None:
+    # success_patterns/failure_patterns already include some Phase 0 columns in
+    # fresh schema; this keeps older databases forward-compatible.
+    _add_column_if_missing(conn, "success_patterns", "source_type", "source_type TEXT")
+    _add_column_if_missing(conn, "success_patterns", "source_ref", "source_ref TEXT")
+    _add_column_if_missing(
+        conn,
+        "success_patterns",
+        "harvest_meta",
+        "harvest_meta TEXT NOT NULL DEFAULT '{}'",
+    )
+    _add_column_if_missing(
+        conn,
+        "success_patterns",
+        "shared_publication_id",
+        "shared_publication_id TEXT",
+    )
+
+    _add_column_if_missing(conn, "failure_patterns", "source_type", "source_type TEXT")
+    _add_column_if_missing(conn, "failure_patterns", "source_ref", "source_ref TEXT")
+    _add_column_if_missing(
+        conn,
+        "failure_patterns",
+        "harvest_meta",
+        "harvest_meta TEXT NOT NULL DEFAULT '{}'",
+    )
+    _add_column_if_missing(
+        conn,
+        "failure_patterns",
+        "shared_publication_id",
+        "shared_publication_id TEXT",
+    )
+
+    _add_column_if_missing(
+        conn,
+        "project_rules",
+        "source_type",
+        "source_type TEXT NOT NULL DEFAULT 'manual'",
+    )
+    _add_column_if_missing(conn, "project_rules", "source_ref", "source_ref TEXT")
+    _add_column_if_missing(
+        conn,
+        "project_rules",
+        "harvest_meta",
+        "harvest_meta TEXT NOT NULL DEFAULT '{}'",
+    )
+    _add_column_if_missing(
+        conn,
+        "project_rules",
+        "review_state",
+        "review_state TEXT NOT NULL DEFAULT 'confirmed'",
+    )
+    _add_column_if_missing(
+        conn,
+        "project_rules",
+        "shared_publication_id",
+        "shared_publication_id TEXT",
+    )
+
+
+def _backfill_phase0_defaults(conn: sqlite3.Connection) -> None:
+    conn.execute("UPDATE success_patterns SET source_type = 'manual' WHERE source_type IS NULL OR source_type = ''")
+    conn.execute("UPDATE failure_patterns SET source_type = 'manual' WHERE source_type IS NULL OR source_type = ''")
+    conn.execute("UPDATE project_rules SET source_type = 'manual' WHERE source_type IS NULL OR source_type = ''")
+
+    conn.execute(
+        "UPDATE success_patterns SET review_state = 'confirmed' WHERE review_state IS NULL OR review_state = ''"
+    )
+    conn.execute(
+        "UPDATE failure_patterns SET review_state = 'confirmed' WHERE review_state IS NULL OR review_state = ''"
+    )
+    conn.execute("UPDATE project_rules SET review_state = 'confirmed' WHERE review_state IS NULL OR review_state = ''")
+
+    conn.execute("UPDATE success_patterns SET harvest_meta = '{}' WHERE harvest_meta IS NULL OR harvest_meta = ''")
+    conn.execute("UPDATE failure_patterns SET harvest_meta = '{}' WHERE harvest_meta IS NULL OR harvest_meta = ''")
+    conn.execute("UPDATE project_rules SET harvest_meta = '{}' WHERE harvest_meta IS NULL OR harvest_meta = ''")
+
+
 def create_schema(conn: sqlite3.Connection) -> None:
+    # Ensure Phase 0 columns exist on any pre-existing tables BEFORE running
+    # the schema script, because SCHEMA_SQL contains CREATE INDEX statements
+    # that reference those columns (e.g. review_state). Without this, a DB
+    # created by an earlier VibeCode version raises
+    # `sqlite3.OperationalError: no such column: review_state`.
+    _ensure_phase0_columns(conn)
     conn.executescript(SCHEMA_SQL)
+    _ensure_phase0_columns(conn)
+    _backfill_phase0_defaults(conn)
     conn.commit()

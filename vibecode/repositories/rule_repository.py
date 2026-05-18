@@ -16,8 +16,9 @@ class RuleRepository:
         INSERT INTO project_rules (
             rule_id, project_id, rule_text, rule_type, severity,
             source_success_pattern_id, source_failure_id, tags_json,
+            source_type, source_ref, harvest_meta, review_state, shared_publication_id,
             is_active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(
             sql,
@@ -30,6 +31,11 @@ class RuleRepository:
                 rule.source_success_pattern_id,
                 rule.source_failure_id,
                 json.dumps(rule.tags),
+                rule.source_type,
+                rule.source_ref,
+                json.dumps(rule.harvest_meta),
+                rule.review_state,
+                rule.shared_publication_id,
                 1 if rule.is_active else 0,
                 rule.created_at,
                 rule.updated_at,
@@ -38,17 +44,13 @@ class RuleRepository:
         self.conn.commit()
 
     def get_by_id(self, rule_id: str) -> ProjectRule | None:
-        row = self.conn.execute(
-            "SELECT * FROM project_rules WHERE rule_id = ?", (rule_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM project_rules WHERE rule_id = ?", (rule_id,)).fetchone()
         if not row:
             return None
         return self._row_to_rule(row)
 
     def list_active(self) -> list[ProjectRule]:
-        rows = self.conn.execute(
-            "SELECT * FROM project_rules WHERE is_active = 1"
-        ).fetchall()
+        rows = self.conn.execute("SELECT * FROM project_rules WHERE is_active = 1").fetchall()
         return [self._row_to_rule(r) for r in rows]
 
     def search(self, query: str) -> list[ProjectRule]:
@@ -69,6 +71,7 @@ class RuleRepository:
         UPDATE project_rules SET
             rule_text = ?, rule_type = ?, severity = ?,
             source_success_pattern_id = ?, source_failure_id = ?, tags_json = ?,
+            source_type = ?, source_ref = ?, harvest_meta = ?, review_state = ?, shared_publication_id = ?,
             is_active = ?, updated_at = ?
         WHERE rule_id = ?
         """
@@ -81,6 +84,11 @@ class RuleRepository:
                 rule.source_success_pattern_id,
                 rule.source_failure_id,
                 json.dumps(rule.tags),
+                rule.source_type,
+                rule.source_ref,
+                json.dumps(rule.harvest_meta),
+                rule.review_state,
+                rule.shared_publication_id,
                 1 if rule.is_active else 0,
                 rule.updated_at,
                 rule.rule_id,
@@ -96,14 +104,13 @@ class RuleRepository:
         self.conn.commit()
 
     def hard_delete_for_tests_only(self, rule_id: str) -> None:
-        self.conn.execute(
-            "DELETE FROM project_rules WHERE rule_id = ?", (rule_id,)
-        )
+        self.conn.execute("DELETE FROM project_rules WHERE rule_id = ?", (rule_id,))
         self.conn.commit()
 
     @staticmethod
     def _row_to_rule(row: sqlite3.Row) -> ProjectRule:
         data = dict(row)
         data["tags"] = json.loads(data.pop("tags_json", "[]"))
+        data["harvest_meta"] = json.loads(data.get("harvest_meta", "{}") or "{}")
         data["is_active"] = bool(data.get("is_active", 1))
         return ProjectRule(**data)

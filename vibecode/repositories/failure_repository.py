@@ -18,9 +18,10 @@ class FailureRepository:
             corrected_approach, prevention_rule, language, framework,
             affected_files_json, tags_json, severity, confidence_score, usage_count,
             confidence, occurrence_count, last_seen_at, agent_source, review_state,
-            source_type, source_ref, source_commit, source_file_path, content_hash,
+            source_type, source_ref, harvest_meta, shared_publication_id,
+            source_commit, source_file_path, content_hash,
             is_active, created_at, updated_at, last_used
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(
             sql,
@@ -46,6 +47,8 @@ class FailureRepository:
                 pattern.review_state,
                 pattern.source_type,
                 pattern.source_ref,
+                json.dumps(pattern.harvest_meta),
+                pattern.shared_publication_id,
                 pattern.source_commit,
                 pattern.source_file_path,
                 pattern.content_hash,
@@ -103,6 +106,7 @@ class FailureRepository:
             corrected_approach = ?, prevention_rule = ?, language = ?, framework = ?,
             affected_files_json = ?, tags_json = ?, severity = ?,
             confidence_score = ?, usage_count = ?, source_type = ?, source_ref = ?,
+            harvest_meta = ?, shared_publication_id = ?,
             confidence = ?, occurrence_count = ?, last_seen_at = ?, agent_source = ?, review_state = ?,
             source_commit = ?, source_file_path = ?, content_hash = ?,
             is_active = ?, updated_at = ?, last_used = ?
@@ -125,6 +129,8 @@ class FailureRepository:
                 pattern.usage_count,
                 pattern.source_type,
                 pattern.source_ref,
+                json.dumps(pattern.harvest_meta),
+                pattern.shared_publication_id,
                 pattern.confidence,
                 pattern.occurrence_count,
                 pattern.last_seen_at,
@@ -209,5 +215,6 @@ class FailureRepository:
         data = dict(row)
         data["tags"] = json.loads(data.pop("tags_json", "[]"))
         data["affected_files"] = json.loads(data.pop("affected_files_json", "[]"))
+        data["harvest_meta"] = json.loads(data.get("harvest_meta", "{}") or "{}")
         data["is_active"] = bool(data.get("is_active", 1))
         return FailurePattern(**data)

@@ -1,4 +1,5 @@
 __all__ = [
+    "AuditLogRepository",
     "Base",
     "create_engine_from_settings",
     "create_schema",
@@ -12,6 +13,10 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "AuditLogRepository":
+        from vibecode.db.audit_log_repository import AuditLogRepository
+
+        return AuditLogRepository
     if name in {"PostgresSettings", "get_postgres_settings"}:
         from vibecode.db.config import PostgresSettings, get_postgres_settings
 

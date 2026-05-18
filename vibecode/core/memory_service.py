@@ -16,6 +16,7 @@ from vibecode.core.health_service import decay_confidence
 from vibecode.core.outcome_tracker import OutcomeTracker
 from vibecode.core.prevention_service import PreventionService
 from vibecode.core.security import ProjectAllowlist, redact_secrets
+from vibecode.db.audit_log_repository import AuditLogRepository
 from vibecode.db.sqlite_connection import get_connection, get_db_path
 from vibecode.models import (
     AgentProfile,
@@ -106,6 +107,30 @@ class VibeCodeService:
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    def _audit(
+        self,
+        actor: str,
+        action: str,
+        target_type: str,
+        target_id: str,
+        project_path: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> None:
+        if self.conn is None:
+            return
+        try:
+            AuditLogRepository(self.conn).record(
+                actor=actor,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                project_path=project_path,
+                meta=meta,
+            )
+        except Exception:
+            # Audit logging must never break primary memory operations.
+            return
+
     def health_check(self) -> dict[str, Any]:
         db_ok = get_db_path(self.base_dir).exists()
         storage = "sqlite" if db_ok else "json"
@@ -178,6 +203,23 @@ class VibeCodeService:
                 item["corrected_approach"] = r.obj.corrected_approach
             out.append(item)
 
+        self._audit(
+            actor="api",
+            action="memory.search",
+            target_type="query",
+            target_id=redact_secrets(query)[:120],
+            project_path=project_path,
+            meta={
+                "result_count": len(out),
+                "include_success_patterns": include_success_patterns,
+                "include_failure_patterns": include_failure_patterns,
+                "include_project_rules": include_project_rules,
+                "language": language,
+                "framework": framework,
+                "max_results": max_results,
+            },
+        )
+
         return {
             "query": query,
             "results": out,
@@ -218,6 +260,20 @@ class VibeCodeService:
             "project_rules": markdown.count("## Relevant Project Rules"),
             "success_patterns": markdown.count("## Relevant Success Patterns"),
         }
+
+        self._audit(
+            actor=profile_obj.name,
+            action="memory.inject",
+            target_type="query",
+            target_id=redact_secrets(query)[:120],
+            project_path=project_path,
+            meta={
+                "agent_profile": profile_obj.name,
+                "max_context_tokens": profile_obj.max_context_tokens,
+                "estimated_context_tokens": tokens,
+                "included_counts": included_counts,
+            },
+        )
 
         return {
             "context_markdown": markdown,
@@ -275,6 +331,18 @@ class VibeCodeService:
             "review_state": review_state or "confirmed",
         }
         pattern, created = self.capture.capture_success(data)
+        self._audit(
+            actor=data["agent_source"] or "manual",
+            action="memory.capture_success",
+            target_type="success_pattern",
+            target_id=pattern.pattern_id,
+            project_path=project_path,
+            meta={
+                "created": created,
+                "source_type": data["source_type"],
+                "review_state": data["review_state"],
+            },
+        )
         return {
             "pattern_id": pattern.pattern_id,
             "created": created,
@@ -325,6 +393,19 @@ class VibeCodeService:
             "review_state": review_state or "confirmed",
         }
         pattern, created = self.capture.capture_failure(data)
+        self._audit(
+            actor=data["agent_source"] or "manual",
+            action="memory.capture_failure",
+            target_type="failure_pattern",
+            target_id=pattern.failure_id,
+            project_path=project_path,
+            meta={
+                "created": created,
+                "severity": data["severity"],
+                "source_type": data["source_type"],
+                "review_state": data["review_state"],
+            },
+        )
         return {
             "failure_id": pattern.failure_id,
             "created": created,
@@ -353,6 +434,18 @@ class VibeCodeService:
             "source_ref": source_ref or "",
         }
         rule = self.capture.add_rule(data)
+        self._audit(
+            actor="manual",
+            action="memory.add_rule",
+            target_type="project_rule",
+            target_id=rule.rule_id,
+            project_path=project_path,
+            meta={
+                "rule_type": rule.rule_type,
+                "severity": rule.severity,
+                "source_type": rule.source_type,
+            },
+        )
         return {
             "rule_id": rule.rule_id,
             "created": True,
@@ -433,11 +526,39 @@ class VibeCodeService:
         event.text_before = redact_secrets(event.text_before)
         event.text_after = redact_secrets(event.text_after)
 
+        self._audit(
+            actor=event.agent_source,
+            action="observe.edit",
+            target_type="edit_event",
+            target_id=event.event_id,
+            project_path=event.project_path,
+            meta={
+                "file_path": event.file_path,
+                "language": event.language,
+                "document_version": event.document_version,
+                "text_before_len": len(event.text_before),
+                "text_after_len": len(event.text_after),
+            },
+        )
+
         self._outcome_tracker.track_edit(event)
         return {"event_id": event.event_id}
 
     def observe_diagnostic(self, payload: dict[str, Any]) -> None:
         signal = DiagnosticSignal(**payload)
+        self._audit(
+            actor="observer",
+            action="observe.diagnostic",
+            target_type="diagnostic_signal",
+            target_id=f"diag:{int(signal.timestamp)}",
+            project_path=signal.project_path,
+            meta={
+                "file_path": signal.file_path,
+                "severity": signal.severity,
+                "is_new": signal.is_new,
+                "is_resolved": signal.is_resolved,
+            },
+        )
         if not self.settings.auto_capture_enabled:
             return
         decisions = self._outcome_tracker.apply_diagnostic(signal)
@@ -445,6 +566,19 @@ class VibeCodeService:
 
     def observe_test(self, payload: dict[str, Any]) -> None:
         signal = TestSignal(**payload)
+        self._audit(
+            actor="observer",
+            action="observe.test",
+            target_type="test_signal",
+            target_id=f"test:{int(signal.timestamp)}",
+            project_path=signal.project_path,
+            meta={
+                "test_name": signal.test_name,
+                "file_path": signal.file_path,
+                "status_before": signal.status_before,
+                "status_after": signal.status_after,
+            },
+        )
         if not self.settings.auto_capture_enabled:
             return
         decisions = self._outcome_tracker.apply_test(signal)
@@ -452,6 +586,14 @@ class VibeCodeService:
 
     def observe_revert(self, payload: dict[str, Any]) -> None:
         signal = RevertSignal(**payload)
+        self._audit(
+            actor="observer",
+            action="observe.revert",
+            target_type="revert_signal",
+            target_id=signal.event_id,
+            project_path=signal.project_path,
+            meta={"timestamp": signal.timestamp},
+        )
         if not self.settings.auto_capture_enabled:
             return
         decisions = self._outcome_tracker.apply_revert(signal)
@@ -459,6 +601,17 @@ class VibeCodeService:
 
     def observe_terminal(self, payload: dict[str, Any]) -> None:
         signal = TerminalSignal(**payload)
+        self._audit(
+            actor="observer",
+            action="observe.terminal",
+            target_type="terminal_signal",
+            target_id=f"terminal:{int(signal.ended_at)}",
+            project_path=signal.project_path,
+            meta={
+                "cwd": signal.cwd,
+                "exit_code": signal.exit_code,
+            },
+        )
         if not self.settings.auto_capture_enabled:
             return
         decisions = self._outcome_tracker.apply_terminal(signal)

@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from vibecode.api.app import create_app
+from vibecode.api.app import create_app  # noqa: F401
 
 
 def test_inject_context_prioritizes_failure_warnings() -> None:
@@ -47,11 +44,11 @@ def test_inject_context_prioritizes_failure_warnings() -> None:
         capture.seed_profiles()
         conn.close()
 
-        with patch("vibecode.api.routes_memory.service.base_dir", base):
-            from vibecode.core.memory_service import VibeCodeService
-            svc = VibeCodeService(base)
-            result = svc.inject_context("audio", agent_profile="generic-agent")
-            if svc.conn:
-                svc.conn.close()
-            assert "VibeCode Agent Context" in result["context_markdown"]
-            assert "Relevant Failure Warnings" in result["context_markdown"]
+        from vibecode.core.memory_service import VibeCodeService
+
+        svc = VibeCodeService(base)
+        result = svc.inject_context("audio", agent_profile="generic-agent")
+        if svc.conn:
+            svc.conn.close()
+        assert "VibeCode Agent Context" in result["context_markdown"]
+        assert "Relevant Failure Warnings" in result["context_markdown"]

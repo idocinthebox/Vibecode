@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from vibecode.api.app import create_app
+from vibecode.api.app import create_app  # noqa: F401  (keeps import surface stable)
 
 
 def test_search_memory_returns_success_failure_and_rules() -> None:
@@ -55,13 +52,13 @@ def test_search_memory_returns_success_failure_and_rules() -> None:
         )
         conn.close()
 
-        with patch("vibecode.api.routes_memory.service.base_dir", base):
-            from vibecode.core.memory_service import VibeCodeService
-            svc = VibeCodeService(base)
-            result = svc.search_memory("qt", max_results=10)
-            if svc.conn:
-                svc.conn.close()
-            types = [r["memory_type"] for r in result["results"]]
-            assert "success_pattern" in types
-            assert "failure_pattern" in types
-            assert "project_rule" in types
+        from vibecode.core.memory_service import VibeCodeService
+
+        svc = VibeCodeService(base)
+        result = svc.search_memory("qt", max_results=10)
+        if svc.conn:
+            svc.conn.close()
+        types = [r["memory_type"] for r in result["results"]]
+        assert "success_pattern" in types
+        assert "failure_pattern" in types
+        assert "project_rule" in types

@@ -20,9 +20,10 @@ class PatternRepository:
             token_cost_original, token_cost_retrieval, estimated_tokens_saved,
             confidence_score, usage_count, success_rate,
             confidence, occurrence_count, last_seen_at, agent_source, review_state,
-            source_type, source_ref, source_commit, source_file_path, content_hash,
+            source_type, source_ref, harvest_meta, shared_publication_id,
+            source_commit, source_file_path, content_hash,
             is_active, created_at, updated_at, last_used
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(
             sql,
@@ -56,6 +57,8 @@ class PatternRepository:
                 pattern.review_state,
                 pattern.source_type,
                 pattern.source_ref,
+                json.dumps(pattern.harvest_meta),
+                pattern.shared_publication_id,
                 pattern.source_commit,
                 pattern.source_file_path,
                 pattern.content_hash,
@@ -115,7 +118,8 @@ class PatternRepository:
             token_cost_original = ?, token_cost_retrieval = ?, estimated_tokens_saved = ?,
             confidence_score = ?, usage_count = ?, success_rate = ?,
             confidence = ?, occurrence_count = ?, last_seen_at = ?, agent_source = ?, review_state = ?,
-            source_type = ?, source_ref = ?, source_commit = ?, source_file_path = ?, content_hash = ?,
+            source_type = ?, source_ref = ?, harvest_meta = ?, shared_publication_id = ?,
+            source_commit = ?, source_file_path = ?, content_hash = ?,
             is_active = ?, updated_at = ?, last_used = ?
         WHERE pattern_id = ?
         """
@@ -149,6 +153,8 @@ class PatternRepository:
                 pattern.review_state,
                 pattern.source_type,
                 pattern.source_ref,
+                json.dumps(pattern.harvest_meta),
+                pattern.shared_publication_id,
                 pattern.source_commit,
                 pattern.source_file_path,
                 pattern.content_hash,
@@ -224,5 +230,6 @@ class PatternRepository:
         data["tags"] = json.loads(data.pop("tags_json", "[]"))
         data["affected_files"] = json.loads(data.pop("affected_files_json", "[]"))
         data["reasoning_steps"] = json.loads(data.pop("reasoning_steps_json", "[]"))
+        data["harvest_meta"] = json.loads(data.get("harvest_meta", "{}") or "{}")
         data["is_active"] = bool(data.get("is_active", 1))
         return SuccessPattern(**data)

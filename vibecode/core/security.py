@@ -4,7 +4,6 @@ import json
 import re
 from pathlib import Path
 
-
 SECRET_PATTERNS = [
     (r"(?i)(OPENAI_API_KEY\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(ANTHROPIC_API_KEY\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
@@ -12,10 +11,14 @@ SECRET_PATTERNS = [
     (r"(?i)(GITHUB_PAT\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(AWS_ACCESS_KEY_ID\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(AWS_SECRET_ACCESS_KEY\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
+    (r"(?i)(AWS_SESSION_TOKEN\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(CLOUDFLARE_API_TOKEN\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(DATABASE_URL\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(PASSWORD\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
     (r"(?i)(SECRET\s*=\s*)[^\s\n]+", r"\1[REDACTED_SECRET]"),
+    (r"(?i)(mongodb(?:\+srv)?://)[^\s\"']+", r"[REDACTED_SECRET]"),
+    (r"(?i)(xoxb-[A-Za-z0-9-]{10,})", r"[REDACTED_SECRET]"),
+    (r"(?i)(eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)", r"[REDACTED_SECRET]"),
     (r"(?i)(PRIVATE\s+KEY)", r"[REDACTED_SECRET]"),
     (r"(?i)(-----BEGIN\s+[^-]+-----).*?(-----END\s+[^-]+-----)", r"[REDACTED_SECRET]"),
     (r"(?i)(sk-[a-zA-Z0-9]{20,})", r"[REDACTED_SECRET]"),
@@ -40,7 +43,7 @@ class ProjectAllowlist:
     def _load(self) -> dict:
         if not self._path.exists():
             return {"allowed_projects": []}
-        with open(self._path, "r", encoding="utf-8") as f:
+        with open(self._path, encoding="utf-8") as f:
             return json.load(f)
 
     def _save(self, data: dict) -> None:
