@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from vibecode.api.errors import VibeCodeAPIError, api_error_handler
+from vibecode.api.routes_harvest import router as harvest_router
 from vibecode.api.routes_health import router as health_router
 from vibecode.api.routes_memory import router as memory_router
 from vibecode.api.routes_observe import router as observe_router
@@ -26,4 +27,5 @@ def create_app() -> FastAPI:
     app.include_router(memory_router)
     app.include_router(observe_router)
     app.include_router(review_router)
+    app.include_router(harvest_router)
     return app

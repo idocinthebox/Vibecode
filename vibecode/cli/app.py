@@ -6,6 +6,7 @@ from vibecode.cli.commands_capture import cmd_capture_failure, cmd_capture_succe
 from vibecode.cli.commands_config import cmd_config_path, cmd_config_set, cmd_config_show
 from vibecode.cli.commands_doctor import cmd_doctor
 from vibecode.cli.commands_export import cmd_export, cmd_import_file
+from vibecode.cli.commands_harvest import cmd_harvest_report, cmd_harvest_scan, cmd_harvest_sources
 from vibecode.cli.commands_init import (
     cmd_db_status,
     cmd_init,
@@ -13,7 +14,6 @@ from vibecode.cli.commands_init import (
     cmd_migrate_json_to_sqlite,
     cmd_status,
 )
-from vibecode.cli.commands_memory import cmd_inject, cmd_search
 from vibecode.cli.commands_mcp import (
     cmd_mcp_doctor,
     cmd_mcp_start,
@@ -21,6 +21,7 @@ from vibecode.cli.commands_mcp import (
     cmd_mcp_write_cursor_config,
     cmd_mcp_write_kimi_config,
 )
+from vibecode.cli.commands_memory import cmd_inject, cmd_search
 from vibecode.cli.commands_project import cmd_project_allow, cmd_project_list, cmd_project_remove
 from vibecode.cli.commands_report import cmd_report
 from vibecode.cli.commands_rules import cmd_add_rule
@@ -39,11 +40,13 @@ config_app = typer.Typer(name="config", help="Configuration commands")
 service_app = typer.Typer(name="service", help="Local HTTP service commands")
 mcp_app = typer.Typer(name="mcp", help="MCP server commands")
 project_app = typer.Typer(name="project", help="Project allowlist commands")
+harvest_app = typer.Typer(name="harvest", help="Knowledge harvester commands")
 
 app.add_typer(config_app)
 app.add_typer(service_app)
 app.add_typer(mcp_app)
 app.add_typer(project_app)
+app.add_typer(harvest_app)
 
 
 @app.callback()
@@ -51,12 +54,12 @@ def main_callback(
     debug: bool = typer.Option(False, "--debug", help="Show full tracebacks on error"),
 ) -> None:
     """VibeCode CLI."""
-    pass
 
 
 # ---------------------------------------------------------------------------
 # Top-level commands
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def init() -> None:
@@ -110,7 +113,9 @@ def search(
 @app.command()
 def inject(
     query: str | None = typer.Argument(None, help="Task query (positional). Alternative to --query."),
-    query_opt: str | None = typer.Option(None, "--query", help="Task query (named). Alternative to the positional argument."),
+    query_opt: str | None = typer.Option(
+        None, "--query", help="Task query (named). Alternative to the positional argument."
+    ),
     profile: str = typer.Option("generic-agent", "--profile"),
     project: str | None = typer.Option(None, "--project"),
     max_tokens: int | None = typer.Option(None, "--max-tokens"),
@@ -150,9 +155,22 @@ def capture_success(
 ) -> None:
     """Capture a success pattern."""
     cmd_capture_success(
-        project, name, intent, language, framework, files, summary,
-        original_prompt, code_before, code_after, diff, explanation,
-        tags, source_type, source_ref, interactive,
+        project,
+        name,
+        intent,
+        language,
+        framework,
+        files,
+        summary,
+        original_prompt,
+        code_before,
+        code_after,
+        diff,
+        explanation,
+        tags,
+        source_type,
+        source_ref,
+        interactive,
     )
 
 
@@ -175,9 +193,20 @@ def capture_failure(
 ) -> None:
     """Capture a failure pattern."""
     cmd_capture_failure(
-        project, task_intent, bad_suggestion, failure_reason,
-        corrected_approach, prevention_rule, severity, language, framework,
-        files, tags, source_type, source_ref, interactive,
+        project,
+        task_intent,
+        bad_suggestion,
+        failure_reason,
+        corrected_approach,
+        prevention_rule,
+        severity,
+        language,
+        framework,
+        files,
+        tags,
+        source_type,
+        source_ref,
+        interactive,
     )
 
 
@@ -194,7 +223,14 @@ def add_rule(
 ) -> None:
     """Add a project rule."""
     cmd_add_rule(
-        project, rule_text, rule_type, severity, tags, source_type, source_ref, interactive,
+        project,
+        rule_text,
+        rule_type,
+        severity,
+        tags,
+        source_type,
+        source_ref,
+        interactive,
     )
 
 
@@ -239,6 +275,7 @@ def completion_install(
 # Config subcommands
 # ---------------------------------------------------------------------------
 
+
 @config_app.command("show")
 def config_show() -> None:
     """Show current configuration."""
@@ -264,6 +301,7 @@ def config_path_cmd() -> None:
 # ---------------------------------------------------------------------------
 # Service subcommands
 # ---------------------------------------------------------------------------
+
 
 @service_app.command("start")
 def service_start(
@@ -295,6 +333,7 @@ def service_doctor() -> None:
 # ---------------------------------------------------------------------------
 # MCP subcommands
 # ---------------------------------------------------------------------------
+
 
 @mcp_app.command("start")
 def mcp_start() -> None:
@@ -330,6 +369,7 @@ def mcp_write_kimi_config() -> None:
 # Project subcommands
 # ---------------------------------------------------------------------------
 
+
 @project_app.command("allow")
 def project_allow(path: str) -> None:
     """Allow a project path."""
@@ -346,3 +386,55 @@ def project_list() -> None:
 def project_remove(path: str) -> None:
     """Remove a project from the allowlist."""
     cmd_project_remove(path)
+
+
+# ---------------------------------------------------------------------------
+# Harvest subcommands
+# ---------------------------------------------------------------------------
+
+
+@harvest_app.command("scan")
+def harvest_scan(
+    project: str | None = typer.Option(None, "--project"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    auto_confirm: float = typer.Option(0.8, "--auto-confirm"),
+    max_files: int = typer.Option(500, "--max-files"),
+    include: list[str] = typer.Option([], "--include"),
+    exclude: list[str] = typer.Option([], "--exclude"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Scan project docs and write harvested candidates."""
+    cmd_harvest_scan(project, dry_run, auto_confirm, max_files, include, exclude, json_output)
+
+
+@harvest_app.command("preview")
+def harvest_preview(
+    project: str | None = typer.Option(None, "--project"),
+    auto_confirm: float = typer.Option(0.8, "--auto-confirm"),
+    max_files: int = typer.Option(500, "--max-files"),
+    include: list[str] = typer.Option([], "--include"),
+    exclude: list[str] = typer.Option([], "--exclude"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Preview harvested candidates without writing to memory stores."""
+    cmd_harvest_scan(project, True, auto_confirm, max_files, include, exclude, json_output)
+
+
+@harvest_app.command("report")
+def harvest_report(
+    report_id: str | None = typer.Option(None, "--id"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show latest harvest report or a report by id."""
+    cmd_harvest_report(report_id, json_output)
+
+
+@harvest_app.command("sources")
+def harvest_sources(
+    list_sources: bool = typer.Option(True, "--list"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List default harvest source patterns."""
+    if not list_sources:
+        return
+    cmd_harvest_sources(json_output)
