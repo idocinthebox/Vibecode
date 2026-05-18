@@ -30,7 +30,24 @@ class MarkdownRuleExtractor:
 
     @staticmethod
     def matches(relative_path: str) -> bool:
-        return relative_path.lower().endswith(".md")
+        p = relative_path.replace("\\", "/")
+        lower = p.lower()
+        if not lower.endswith(".md"):
+            return False
+        if lower in {"claude.md", "agents.md", "changelog.md"}:
+            return False
+        if lower.endswith(".adr.md") or lower.startswith("docs/adr/"):
+            return False
+        if lower.startswith(".cursor/rules/") or lower.endswith("copilot-instructions.md"):
+            return False
+        return (
+            lower.startswith("docs/")
+            or lower.startswith(".github/")
+            or lower.endswith("readme.md")
+            or lower.endswith("contributing.md")
+            or lower.endswith("architecture.md")
+            or lower.endswith("styleguide.md")
+        )
 
     def extract(self, path: Path, relative_path: str) -> list[CandidateMemory]:
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()

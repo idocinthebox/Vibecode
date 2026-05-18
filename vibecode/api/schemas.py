@@ -295,7 +295,7 @@ class ObserveEditResponse(BaseModel):
 
 
 class PendingReviewItem(BaseModel):
-    memory_type: Literal["success_pattern", "failure_pattern"]
+    memory_type: Literal["success_pattern", "failure_pattern", "project_rule"]
     memory_id: str
     title: str
     summary: str
@@ -304,10 +304,12 @@ class PendingReviewItem(BaseModel):
     review_state: str
     agent_source: str | None = None
     last_seen_at: str | None = None
+    source_type: str | None = None
+    source_ref: str | None = None
 
 
 class ConfirmReviewRequest(BaseModel):
-    memory_type: Literal["success_pattern", "failure_pattern"]
+    memory_type: Literal["success_pattern", "failure_pattern", "project_rule"]
     edits: dict | None = None
 
 

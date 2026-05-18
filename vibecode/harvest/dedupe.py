@@ -42,3 +42,39 @@ def is_near_duplicate(
     if vec_a is None or vec_b is None:
         return False
     return cosine_similarity(vec_a, vec_b) >= threshold
+
+
+def dedupe_candidates_with_embeddings(
+    candidates: list[CandidateMemory],
+    embedding_service: EmbeddingService,
+    threshold: float = 0.92,
+) -> tuple[list[CandidateMemory], int]:
+    if not embedding_service.is_available():
+        return candidates, 0
+
+    unique: list[CandidateMemory] = []
+    duplicates = 0
+
+    for candidate in candidates:
+        candidate_text = candidate.dedupe_text() or ""
+        is_duplicate = False
+        for existing in unique:
+            if existing.memory_type != candidate.memory_type:
+                continue
+            if (existing.language or "") != (candidate.language or ""):
+                continue
+            existing_text = existing.dedupe_text() or ""
+            if is_near_duplicate(
+                embedding_service=embedding_service,
+                text_a=candidate_text,
+                text_b=existing_text,
+                threshold=threshold,
+            ):
+                duplicates += 1
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            unique.append(candidate)
+
+    return unique, duplicates

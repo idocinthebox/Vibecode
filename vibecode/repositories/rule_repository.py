@@ -53,6 +53,18 @@ class RuleRepository:
         rows = self.conn.execute("SELECT * FROM project_rules WHERE is_active = 1").fetchall()
         return [self._row_to_rule(r) for r in rows]
 
+    def list_pending_review(self, limit: int = 200) -> list[ProjectRule]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM project_rules
+            WHERE is_active = 1 AND review_state = 'pending'
+            ORDER BY COALESCE(updated_at, created_at) DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [self._row_to_rule(r) for r in rows]
+
     def search(self, query: str) -> list[ProjectRule]:
         like = f"%{query}%"
         rows = self.conn.execute(
@@ -105,6 +117,13 @@ class RuleRepository:
 
     def hard_delete_for_tests_only(self, rule_id: str) -> None:
         self.conn.execute("DELETE FROM project_rules WHERE rule_id = ?", (rule_id,))
+        self.conn.commit()
+
+    def set_review_state(self, rule_id: str, review_state: str) -> None:
+        self.conn.execute(
+            "UPDATE project_rules SET review_state = ?, updated_at = datetime('now') WHERE rule_id = ?",
+            (review_state, rule_id),
+        )
         self.conn.commit()
 
     @staticmethod

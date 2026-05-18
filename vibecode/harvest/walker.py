@@ -24,6 +24,11 @@ DEFAULT_INCLUDE_PATTERNS = [
     ".editorconfig",
     "mypy.ini",
     "ruff.toml",
+    "**/*.py",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
 ]
 
 

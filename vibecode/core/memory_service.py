@@ -657,7 +657,12 @@ class VibeCodeService:
         return result
 
     def get_pending_review(self) -> list[dict[str, Any]]:
-        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+        if (
+            self.conn is None
+            or self.capture.pattern_repo is None
+            or self.capture.failure_repo is None
+            or self.capture.rule_repo is None
+        ):
             return []
 
         pending: list[dict[str, Any]] = []
@@ -673,6 +678,8 @@ class VibeCodeService:
                     "review_state": item.review_state,
                     "agent_source": item.agent_source or None,
                     "last_seen_at": item.last_seen_at,
+                    "source_type": item.source_type,
+                    "source_ref": item.source_ref,
                 }
             )
 
@@ -688,6 +695,25 @@ class VibeCodeService:
                     "review_state": item.review_state,
                     "agent_source": item.agent_source or None,
                     "last_seen_at": item.last_seen_at,
+                    "source_type": item.source_type,
+                    "source_ref": item.source_ref,
+                }
+            )
+
+        for item in self.capture.rule_repo.list_pending_review(limit=200):
+            pending.append(
+                {
+                    "memory_type": "project_rule",
+                    "memory_id": item.rule_id,
+                    "title": item.rule_text[:120],
+                    "summary": item.rule_text,
+                    "confidence": float(item.harvest_meta.get("raw_confidence", 0.0)),
+                    "occurrence_count": 1,
+                    "review_state": item.review_state,
+                    "agent_source": None,
+                    "last_seen_at": item.updated_at,
+                    "source_type": item.source_type,
+                    "source_ref": item.source_ref,
                 }
             )
 
@@ -700,7 +726,12 @@ class VibeCodeService:
         memory_id: str,
         edits: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+        if (
+            self.conn is None
+            or self.capture.pattern_repo is None
+            or self.capture.failure_repo is None
+            or self.capture.rule_repo is None
+        ):
             return self._error("STORAGE_NOT_INITIALIZED")
 
         if memory_type == "failure_pattern":
@@ -729,10 +760,28 @@ class VibeCodeService:
             self.capture.pattern_repo.set_review_state(memory_id, "confirmed")
             return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
 
+        if memory_type == "project_rule":
+            item = self.capture.rule_repo.get_by_id(memory_id)
+            if item is None:
+                return self._error("NOT_FOUND")
+            if edits:
+                for key, value in edits.items():
+                    if hasattr(item, key):
+                        setattr(item, key, value)
+                item.updated_at = self._now()
+                self.capture.rule_repo.update(item)
+            self.capture.rule_repo.set_review_state(memory_id, "confirmed")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
         return self._error("INVALID_MEMORY_TYPE")
 
     def discard_review(self, memory_type: str, memory_id: str) -> dict[str, Any]:
-        if self.conn is None or self.capture.pattern_repo is None or self.capture.failure_repo is None:
+        if (
+            self.conn is None
+            or self.capture.pattern_repo is None
+            or self.capture.failure_repo is None
+            or self.capture.rule_repo is None
+        ):
             return self._error("STORAGE_NOT_INITIALIZED")
 
         if memory_type == "failure_pattern":
@@ -741,6 +790,10 @@ class VibeCodeService:
 
         if memory_type == "success_pattern":
             self.capture.pattern_repo.set_review_state(memory_id, "discarded")
+            return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
+
+        if memory_type == "project_rule":
+            self.capture.rule_repo.set_review_state(memory_id, "discarded")
             return {"ok": True, "memory_id": memory_id, "memory_type": memory_type}
 
         return self._error("INVALID_MEMORY_TYPE")
@@ -787,7 +840,7 @@ class VibeCodeService:
             ),
             "INVALID_MEMORY_TYPE": (
                 "Unsupported memory type.",
-                "Use success_pattern or failure_pattern.",
+                "Use success_pattern, failure_pattern, or project_rule.",
             ),
         }
         msg, fix = messages.get(code, ("Unknown error.", ""))

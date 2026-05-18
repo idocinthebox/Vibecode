@@ -39,6 +39,9 @@ import { registerConfirmAutoCaptureCommand } from './commands/confirmAutoCapture
 import { registerDiscardAutoCaptureCommand } from './commands/discardAutoCaptureCommand';
 import { registerOpenReviewQueueCommand } from './commands/openReviewQueueCommand';
 import { registerInstallAgentRulesCommand } from './commands/installAgentRulesCommand';
+import { registerHarvestProjectKnowledgeCommand } from './commands/harvestProjectKnowledgeCommand';
+import { registerConfirmHarvestedPendingCommand } from './commands/confirmHarvestedPendingCommand';
+import { registerDiscardHarvestedPendingCommand } from './commands/discardHarvestedPendingCommand';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = getLogger();
@@ -82,7 +85,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const reviewQueueTreeView = vscode.window.createTreeView('vibeCodeReviewQueue', {
     treeDataProvider: reviewProvider,
+    manageCheckboxStateManually: true,
   });
+
+  const reviewCheckboxDisposable = reviewQueueTreeView.onDidChangeCheckboxState((event) => {
+    reviewProvider.updateCheckedState(event.items);
+  });
+
+  context.subscriptions.push(reviewCheckboxDisposable);
 
   context.subscriptions.push(memoryTreeView, savingsTreeView, reviewQueueTreeView);
 
@@ -195,7 +205,10 @@ export function activate(context: vscode.ExtensionContext): void {
     registerSearchRelatedMemoryCommand(context),
     registerConfirmAutoCaptureCommand(context, api, reviewProvider),
     registerDiscardAutoCaptureCommand(context, api, reviewProvider),
+    registerConfirmHarvestedPendingCommand(context, api, reviewProvider),
+    registerDiscardHarvestedPendingCommand(context, api, reviewProvider),
     registerOpenReviewQueueCommand(context, reviewProvider),
+    registerHarvestProjectKnowledgeCommand(context, api, workspace, reviewProvider),
   ];
 
   // Agent rules installer (prompt-once per workspace by default).
@@ -205,6 +218,10 @@ export function activate(context: vscode.ExtensionContext): void {
     logger.warn(`Rules installer failed: ${err}`);
   });
 
+  maybePromptHarvestOnActivation(context).catch((err) => {
+    logger.warn(`Harvest init prompt failed: ${err}`);
+  });
+
   disposables.forEach((d) => context.subscriptions.push(d));
   logger.info('VibeCode extension activated');
 }
@@ -212,4 +229,54 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   getLogger().info('VibeCode extension deactivating');
   resetLogger();
+}
+
+async function maybePromptHarvestOnActivation(context: vscode.ExtensionContext): Promise<void> {
+  const config = vscode.workspace.getConfiguration('vibeCode.harvest');
+  const runOnInit = config.get<boolean>('runOnInit', true);
+  if (!runOnInit) {
+    return;
+  }
+
+  const promptKey = 'vibeCode.harvest.initPromptShown';
+  if (context.workspaceState.get<boolean>(promptKey, false)) {
+    return;
+  }
+
+  const hasSources = await workspaceHasHarvestSources();
+  if (!hasSources) {
+    return;
+  }
+
+  await context.workspaceState.update(promptKey, true);
+  const choice = await vscode.window.showInformationMessage(
+    'VibeCode found harvestable sources in this workspace. Harvest project knowledge now?',
+    'Harvest Now',
+    'Later',
+    'Never Ask Again'
+  );
+
+  if (choice === 'Harvest Now') {
+    await vscode.commands.executeCommand('vibeCode.harvestProjectKnowledge', { triggeredByInit: true });
+    return;
+  }
+
+  if (choice === 'Never Ask Again') {
+    await config.update('runOnInit', false, vscode.ConfigurationTarget.Workspace);
+  }
+}
+
+async function workspaceHasHarvestSources(): Promise<boolean> {
+  const probes = [
+    '**/CLAUDE.md',
+    '**/AGENTS.md',
+    '**/CHANGELOG.md',
+    '**/*.adr.md',
+    '**/docs/adr/**/*.md',
+    '**/Docs/adr/**/*.md',
+  ];
+
+  const excludes = '{**/node_modules/**,**/.git/**,**/.venv/**}';
+  const checks = await Promise.all(probes.map((pattern) => vscode.workspace.findFiles(pattern, excludes, 1)));
+  return checks.some((matches) => matches.length > 0);
 }

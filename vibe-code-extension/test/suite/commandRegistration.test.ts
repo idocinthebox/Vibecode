@@ -24,10 +24,16 @@ suite('Command Registration', () => {
     const pkg = loadPkg();
     const events = pkg.activationEvents as string[];
 
-    assert.ok(!events.includes('onStartupFinished'), 'Should not activate on startup');
+    assert.ok(events.includes('onStartupFinished'), 'Should activate on startup for init prompts');
     assert.ok(
-      events.every((e) => e.startsWith('onCommand:') || e.startsWith('onView:') || e.startsWith('onLanguage:')),
-      'All activation events should be command-based, view-based, or language-based'
+      events.every(
+        (e) =>
+          e === 'onStartupFinished' ||
+          e.startsWith('onCommand:') ||
+          e.startsWith('onView:') ||
+          e.startsWith('onLanguage:')
+      ),
+      'Activation events should be startup, command-based, view-based, or language-based'
     );
   });
 

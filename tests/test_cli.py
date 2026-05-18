@@ -33,9 +33,7 @@ def test_init_is_idempotent(temp_base: Path) -> None:
 
 def test_report_counts_memories(temp_base: Path) -> None:
     capture = CaptureService(temp_base)
-    capture.capture_success(
-        {"name": "S", "intent_description": "I", "reasoning_summary": "R"}
-    )
+    capture.capture_success({"name": "S", "intent_description": "I", "reasoning_summary": "R"})
     capture.capture_failure(
         {
             "task_intent": "F",
@@ -45,9 +43,7 @@ def test_report_counts_memories(temp_base: Path) -> None:
             "severity": "low",
         }
     )
-    capture.add_rule(
-        {"rule_text": "R", "rule_type": "architecture", "severity": "low"}
-    )
+    capture.add_rule({"rule_text": "R", "rule_type": "architecture", "severity": "low"})
 
     with patch("vibecode.cli.commands_report.get_vibecode_dir", return_value=temp_base):
         result = runner.invoke(app, ["report"])

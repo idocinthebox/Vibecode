@@ -11,14 +11,22 @@ from vibecode.db.audit_log_repository import AuditLogRepository
 from vibecode.db.sqlite_connection import get_connection
 from vibecode.db.sqlite_schema import create_schema
 from vibecode.harvest.confidence import score_candidate
-from vibecode.harvest.dedupe import dedupe_candidates
-from vibecode.harvest.extractors import ClaudeMdExtractor, MarkdownRuleExtractor
+from vibecode.harvest.dedupe import dedupe_candidates, dedupe_candidates_with_embeddings
+from vibecode.harvest.extractors import (
+    ADRExtractor,
+    ChangelogFixExtractor,
+    ClaudeMdExtractor,
+    InlineCommentExtractor,
+    LinterConfigExtractor,
+    MarkdownRuleExtractor,
+)
 from vibecode.harvest.normalizer import CandidateMemory, normalize_text
 from vibecode.harvest.walker import DEFAULT_INCLUDE_PATTERNS, DocSourceWalker
 from vibecode.models import FailurePattern, ProjectRule, SuccessPattern
 from vibecode.repositories.failure_repository import FailureRepository
 from vibecode.repositories.pattern_repository import PatternRepository
 from vibecode.repositories.rule_repository import RuleRepository
+from vibecode.services.embedding_service import EmbeddingService
 
 
 class KnowledgeHarvester:
@@ -27,8 +35,21 @@ class KnowledgeHarvester:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.allowlist = ProjectAllowlist(self.base_dir)
         self.walker = DocSourceWalker()
+        self.embedding_service = EmbeddingService()
         self.claude_extractor = ClaudeMdExtractor()
+        self.adr_extractor = ADRExtractor()
+        self.changelog_extractor = ChangelogFixExtractor()
+        self.linter_extractor = LinterConfigExtractor()
+        self.inline_comment_extractor = InlineCommentExtractor()
         self.markdown_extractor = MarkdownRuleExtractor()
+        self.extractors = [
+            self.claude_extractor,
+            self.adr_extractor,
+            self.changelog_extractor,
+            self.linter_extractor,
+            self.inline_comment_extractor,
+            self.markdown_extractor,
+        ]
 
     @staticmethod
     def default_sources() -> list[str]:
@@ -63,6 +84,10 @@ class KnowledgeHarvester:
             candidates.extend(extracted)
 
         unique_candidates, in_batch_duplicates = dedupe_candidates(candidates)
+        unique_candidates, semantic_duplicates = dedupe_candidates_with_embeddings(
+            unique_candidates,
+            self.embedding_service,
+        )
 
         if dry_run:
             auto_confirmed = sum(1 for c in unique_candidates if c.confidence >= auto_confirm_threshold)
@@ -72,7 +97,7 @@ class KnowledgeHarvester:
                 "candidates": len(unique_candidates),
                 "auto_confirmed": auto_confirmed,
                 "queued_for_review": queued,
-                "duplicates_skipped": in_batch_duplicates,
+                "duplicates_skipped": in_batch_duplicates + semantic_duplicates,
                 "report_id": "preview",
                 "report_path": str((self.base_dir / "harvest_report.json").as_posix()),
                 "candidate_items": [c.to_preview() for c in unique_candidates],
@@ -210,7 +235,7 @@ class KnowledgeHarvester:
             "candidates": len(unique_candidates),
             "auto_confirmed": auto_confirmed,
             "queued_for_review": queued,
-            "duplicates_skipped": in_batch_duplicates + db_duplicates,
+            "duplicates_skipped": in_batch_duplicates + semantic_duplicates + db_duplicates,
             "report_id": report_id,
             "report_path": str((self.base_dir / "harvest_report.json").as_posix()),
             "candidate_items": [c.to_preview() for c in unique_candidates],
@@ -242,9 +267,14 @@ class KnowledgeHarvester:
     def _extract_for_file(self, path: Path, rel_path: str) -> list[CandidateMemory]:
         if self.claude_extractor.matches(rel_path):
             return self.claude_extractor.extract(path, rel_path)
-        if self.markdown_extractor.matches(rel_path):
-            return self.markdown_extractor.extract(path, rel_path)
-        return []
+
+        extracted: list[CandidateMemory] = []
+        for extractor in self.extractors:
+            if extractor is self.claude_extractor:
+                continue
+            if extractor.matches(rel_path):
+                extracted.extend(extractor.extract(path, rel_path))
+        return extracted
 
     @staticmethod
     def _count_by_extractor(candidates: list[CandidateMemory]) -> dict[str, int]:

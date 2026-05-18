@@ -6,6 +6,8 @@ import {
   CaptureResponse,
   CaptureSuccessRequest,
   ConfirmReviewRequest,
+  HarvestScanRequest,
+  HarvestScanResponse,
   HealthResponse,
   InjectContextRequest,
   InjectContextResponse,
@@ -87,6 +89,19 @@ export class VibeCodeApiClient {
 
   async discardReview(memoryId: string, request: ConfirmReviewRequest): Promise<{ ok: boolean }> {
     return this._post<{ ok: boolean }>(`/review/${encodeURIComponent(memoryId)}/discard`, request, 10000);
+  }
+
+  async harvestScan(request: HarvestScanRequest): Promise<HarvestScanResponse> {
+    return this._post<HarvestScanResponse>('/harvest/scan', request, 60000);
+  }
+
+  async harvestPreview(request: HarvestScanRequest): Promise<HarvestScanResponse> {
+    return this._post<HarvestScanResponse>('/harvest/preview', request, 60000);
+  }
+
+  async harvestReport(reportId?: string): Promise<HarvestScanResponse> {
+    const query = reportId ? `?id=${encodeURIComponent(reportId)}` : '';
+    return this._get<HarvestScanResponse>(`/harvest/report${query}`, 20000);
   }
 
   async preEditCheck(request: PreEditCheckRequest): Promise<PreEditCheckResponse> {

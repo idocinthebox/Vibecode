@@ -29,6 +29,9 @@
     "onCommand:vibeCode.captureFailure",
     "onCommand:vibeCode.confirmAutoCapture",
     "onCommand:vibeCode.discardAutoCapture",
+    "onCommand:vibeCode.confirmHarvestedPending",
+    "onCommand:vibeCode.discardHarvestedPending",
+    "onCommand:vibeCode.harvestProjectKnowledge",
     "onCommand:vibeCode.openReviewQueue",
     "onCommand:vibeCode.installAgentInstructions",
     "onCommand:vibeCode.serviceStatus",
@@ -136,6 +139,24 @@
         "icon": "$(list-unordered)"
       },
       {
+        "command": "vibeCode.harvestProjectKnowledge",
+        "title": "Harvest Project Knowledge",
+        "category": "VibeCode",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "vibeCode.confirmHarvestedPending",
+        "title": "Confirm Checked Harvested Items",
+        "category": "VibeCode",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "vibeCode.discardHarvestedPending",
+        "title": "Discard Checked Harvested Items",
+        "category": "VibeCode",
+        "icon": "$(trash)"
+      },
+      {
         "command": "vibeCode.installAgentInstructions",
         "title": "Install Agent Instructions in Workspace",
         "category": "VibeCode",
@@ -174,6 +195,11 @@
           "command": "vibeCode.openReviewQueue",
           "when": "view == vibeCodeReviewQueue",
           "group": "navigation"
+        },
+        {
+          "command": "vibeCode.harvestProjectKnowledge",
+          "when": "view == vibeCodeReviewQueue",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -185,6 +211,16 @@
         {
           "command": "vibeCode.discardAutoCapture",
           "when": "view == vibeCodeReviewQueue && viewItem == pendingReviewItem",
+          "group": "inline"
+        },
+        {
+          "command": "vibeCode.confirmHarvestedPending",
+          "when": "view == vibeCodeReviewQueue && viewItem == pendingReviewHarvestedGroup",
+          "group": "inline"
+        },
+        {
+          "command": "vibeCode.discardHarvestedPending",
+          "when": "view == vibeCodeReviewQueue && viewItem == pendingReviewHarvestedGroup",
           "group": "inline"
         }
       ]
@@ -353,6 +389,51 @@
           "default": 5,
           "minimum": 1,
           "maximum": 25
+        },
+        "vibeCode.harvest.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable project knowledge harvesting features."
+        },
+        "vibeCode.harvest.runOnInit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prompt to run a harvest scan on first workspace open when harvestable sources are detected."
+        },
+        "vibeCode.harvest.autoConfirmThreshold": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence threshold for auto-confirming harvested candidates."
+        },
+        "vibeCode.harvest.maxFiles": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Maximum number of files to scan in one harvest run."
+        },
+        "vibeCode.harvest.sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "CLAUDE.md",
+            "AGENTS.md",
+            "README.md",
+            "CONTRIBUTING.md",
+            ".github/copilot-instructions.md",
+            ".cursor/rules/**",
+            ".windsurfrules",
+            "docs/**",
+            "Docs/**",
+            "CHANGELOG.md",
+            "ARCHITECTURE.md",
+            "docs/adr/**"
+          ],
+          "description": "Include glob patterns passed to harvest scans."
         },
         "vibeCode.attribution.agentExtensionIds": {
           "type": "array",

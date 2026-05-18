@@ -178,6 +178,7 @@ class ProjectRule(BaseModel):
             "architecture",
             "dependency",
             "ui",
+            "style",
             "testing",
             "build",
             "packaging",

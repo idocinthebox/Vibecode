@@ -169,7 +169,7 @@ export interface ObserveTerminalRequest {
 }
 
 export interface PendingReviewItem {
-  memory_type: 'success_pattern' | 'failure_pattern';
+  memory_type: 'success_pattern' | 'failure_pattern' | 'project_rule';
   memory_id: string;
   title: string;
   summary: string;
@@ -178,11 +178,44 @@ export interface PendingReviewItem {
   review_state: 'pending' | 'confirmed' | 'discarded';
   agent_source?: string;
   last_seen_at?: string;
+  source_type?: string;
+  source_ref?: string;
 }
 
 export interface ConfirmReviewRequest {
-  memory_type: 'success_pattern' | 'failure_pattern';
+  memory_type: 'success_pattern' | 'failure_pattern' | 'project_rule';
   edits?: Record<string, unknown>;
+}
+
+export interface HarvestScanRequest {
+  project_path: string;
+  include?: string[];
+  exclude?: string[];
+  max_files?: number;
+  auto_confirm_threshold?: number;
+  dry_run?: boolean;
+}
+
+export interface HarvestCandidateItem {
+  memory_type: 'success_pattern' | 'failure_pattern' | 'project_rule';
+  title: string;
+  source_type: string;
+  source_ref: string;
+  confidence: number;
+  review_state: 'pending' | 'confirmed' | 'discarded';
+  severity?: string;
+}
+
+export interface HarvestScanResponse {
+  scanned_files: number;
+  candidates: number;
+  auto_confirmed: number;
+  queued_for_review: number;
+  duplicates_skipped: number;
+  report_id: string;
+  report_path: string;
+  candidate_items: HarvestCandidateItem[];
+  extractor_counts: Record<string, number>;
 }
 
 export interface PreEditCheckRequest {
