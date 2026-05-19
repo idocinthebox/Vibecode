@@ -9,6 +9,7 @@ Usage::
     from vibecode.jobs.confidence_decay import start_decay_scheduler
     start_decay_scheduler(base_dir)
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,11 +49,11 @@ def run_once(base_dir: Path) -> int:
 def _decay_loop(base_dir: Path, interval_seconds: int) -> None:
     """Infinite loop that calls run_once every *interval_seconds*."""
     while True:
-        time.sleep(interval_seconds)
         try:
             run_once(base_dir)
         except Exception as exc:  # pragma: no cover
             logger.warning("Unhandled error in decay loop: %s", exc)
+        time.sleep(interval_seconds)
 
 
 def start_decay_scheduler(base_dir: Path, interval_hours: int = 6) -> bool:

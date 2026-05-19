@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 
+from vibecode import __version__
 from vibecode.cli.console import print_info
 from vibecode.cli.formatters import format_doctor_report
 from vibecode.config.paths import get_vibecode_dir
@@ -14,27 +15,76 @@ from vibecode.core.security import redact_secrets
 from vibecode.db.sqlite_connection import get_db_path
 
 
+def _fetch_service_openapi_version(url: str = "http://127.0.0.1:8765/openapi.json") -> str | None:
+    try:
+        from vibecode.integrations.pro_sync import _get_httpx
+
+        httpx = _get_httpx()
+        response = httpx.get(url, timeout=2.0)
+        response.raise_for_status()
+        payload = response.json()
+        info = payload.get("info", {})
+        version = str(info.get("version", "")).strip()
+        return version or None
+    except Exception:
+        return None
+
+
 def cmd_doctor() -> None:
     base = get_vibecode_dir()
     checks: list[dict] = []
 
-    checks.append({
-        "name": "VibeCode version",
-        "status": "OK",
-        "detail": "0.3.0",
-    })
+    checks.append(
+        {
+            "name": "VibeCode version",
+            "status": "OK",
+            "detail": __version__,
+        }
+    )
 
-    checks.append({
-        "name": "Python version",
-        "status": "OK",
-        "detail": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-    })
+    service_version = _fetch_service_openapi_version()
+    if service_version:
+        if service_version == __version__:
+            checks.append(
+                {
+                    "name": "Service version",
+                    "status": "OK",
+                    "detail": f"OpenAPI version {service_version}",
+                }
+            )
+        else:
+            checks.append(
+                {
+                    "name": "Service version",
+                    "status": "WARNING",
+                    "detail": (
+                        "WARNING: Running service is older than installed package "
+                        "— run 'vibecode service restart'."
+                    ),
+                    "fix": f"Installed package={__version__}, running service={service_version}",
+                }
+            )
+
+    checks.append(
+        {
+            "name": "Python version",
+            "status": "OK",
+            "detail": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        }
+    )
 
     config_path = base / "config.toml"
     if config_path.exists():
         checks.append({"name": "Project config file", "status": "OK", "detail": str(config_path)})
     else:
-        checks.append({"name": "Project config file", "status": "WARNING", "detail": "Not found", "fix": "vibecode config set general.default_storage sqlite"})
+        checks.append(
+            {
+                "name": "Project config file",
+                "status": "WARNING",
+                "detail": "Not found",
+                "fix": "vibecode config set general.default_storage sqlite",
+            }
+        )
 
     if base.exists():
         checks.append({"name": ".vibecode folder", "status": "OK"})
@@ -46,18 +96,27 @@ def cmd_doctor() -> None:
         checks.append({"name": "SQLite database", "status": "OK", "detail": str(db_path)})
     else:
         json_exists = (base / "success_patterns").exists()
-        checks.append({
-            "name": "Storage backend",
-            "status": "WARNING" if json_exists else "ERROR",
-            "detail": "JSON fallback" if json_exists else "None",
-            "fix": "vibecode init-db" if not json_exists else "",
-        })
+        checks.append(
+            {
+                "name": "Storage backend",
+                "status": "WARNING" if json_exists else "ERROR",
+                "detail": "JSON fallback" if json_exists else "None",
+                "fix": "vibecode init-db" if not json_exists else "",
+            }
+        )
 
     allowlist_path = base / "allowed_projects.json"
     if allowlist_path.exists():
         checks.append({"name": "Project allowlist", "status": "OK"})
     else:
-        checks.append({"name": "Project allowlist", "status": "WARNING", "detail": "Empty", "fix": "vibecode project allow <path>"})
+        checks.append(
+            {
+                "name": "Project allowlist",
+                "status": "WARNING",
+                "detail": "Empty",
+                "fix": "vibecode project allow <path>",
+            }
+        )
 
     checks.append({"name": "Secret redaction", "status": "OK", "detail": "Enabled"})
 
@@ -106,21 +165,25 @@ def cmd_doctor() -> None:
     pro_token = os.environ.get("VIBECODE_PRO_TOKEN", "")
 
     if not pro_endpoint:
-        checks.append({
-            "name": "Pro databank",
-            "status": "INFO",
-            "detail": "Not configured (optional)",
-            "fix": "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN to enable",
-        })
+        checks.append(
+            {
+                "name": "Pro databank",
+                "status": "INFO",
+                "detail": "Not configured (optional)",
+                "fix": "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN to enable",
+            }
+        )
     else:
         token_set = bool(pro_token)
         if not token_set:
-            checks.append({
-                "name": "Pro databank",
-                "status": "WARNING",
-                "detail": f"Endpoint set ({pro_endpoint}) but VIBECODE_PRO_TOKEN is missing",
-                "fix": "Set VIBECODE_PRO_TOKEN environment variable",
-            })
+            checks.append(
+                {
+                    "name": "Pro databank",
+                    "status": "WARNING",
+                    "detail": f"Endpoint set ({pro_endpoint}) but VIBECODE_PRO_TOKEN is missing",
+                    "fix": "Set VIBECODE_PRO_TOKEN environment variable",
+                }
+            )
         else:
             try:
                 from vibecode.integrations.pro_sync import ProSyncAdapter
@@ -128,23 +191,29 @@ def cmd_doctor() -> None:
                 adapter = ProSyncAdapter(endpoint=pro_endpoint, token=pro_token)
                 result = adapter.get_status()
                 if "error" in result:
-                    checks.append({
-                        "name": "Pro databank",
-                        "status": "ERROR",
-                        "detail": f"Unreachable ({pro_endpoint}): {result['error']}",
-                    })
+                    checks.append(
+                        {
+                            "name": "Pro databank",
+                            "status": "ERROR",
+                            "detail": f"Unreachable ({pro_endpoint}): {result['error']}",
+                        }
+                    )
                 else:
                     approved = result.get("approved_patterns", "?")
-                    checks.append({
-                        "name": "Pro databank",
-                        "status": "OK",
-                        "detail": f"Connected ({pro_endpoint}), approved patterns: {approved}",
-                    })
+                    checks.append(
+                        {
+                            "name": "Pro databank",
+                            "status": "OK",
+                            "detail": f"Connected ({pro_endpoint}), approved patterns: {approved}",
+                        }
+                    )
             except Exception as exc:
-                checks.append({
-                    "name": "Pro databank",
-                    "status": "ERROR",
-                    "detail": f"Exception: {exc}",
-                })
+                checks.append(
+                    {
+                        "name": "Pro databank",
+                        "status": "ERROR",
+                        "detail": f"Exception: {exc}",
+                    }
+                )
 
     format_doctor_report(checks)

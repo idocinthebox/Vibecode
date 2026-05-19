@@ -5,6 +5,7 @@ All settings are read from env vars: VIBECODE_PRO_ENDPOINT, VIBECODE_PRO_TOKEN.
 The adapter is entirely optional — callers must check ``ProSyncAdapter.is_configured()``
 before use.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +18,7 @@ def _get_httpx():
     """Lazy import httpx so the rest of the codebase doesn't require it at load."""
     try:
         import httpx
+
         return httpx
     except ImportError:  # pragma: no cover
         raise ImportError("httpx is required for Pro Sync. Install it with: pip install httpx")

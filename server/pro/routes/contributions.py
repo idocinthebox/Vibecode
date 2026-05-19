@@ -3,8 +3,10 @@
 POST /databank/contributions   — submit a pattern
 DELETE /databank/contributions/{id} — retract a pattern
 """
+
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any, Literal
 
@@ -12,8 +14,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from server.pro.db.schema import get_pro_connection
+from server.pro.security import require_bearer
+from vibecode.core.security import redact_secrets
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_bearer)])
+
+MAX_BODY_BYTES = 64 * 1024
+
+
+def _redact_data(data: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in data.items():
+        out[key] = redact_secrets(value) if isinstance(value, str) else value
+    return out
 
 
 def get_conn():
@@ -44,20 +57,13 @@ class ContributionResponse(BaseModel):
 
 @router.post("/databank/contributions", response_model=ContributionResponse)
 def submit_contribution(request: ContributionRequest, conn=Depends(get_conn)) -> dict:
-    data = request.data
-    title = (
-        data.get("name")
-        or data.get("task_intent")
-        or data.get("rule_text", "")[:120]
-        or "Untitled"
-    )[:500]
-    summary = (
-        data.get("reasoning_summary")
-        or data.get("prevention_rule")
-        or data.get("rule_text", "")
-        or ""
-    )[:2000]
-    body_json = __import__("json").dumps(data)
+    data = _redact_data(request.data)
+    body_json = json.dumps(data)
+    if len(body_json.encode("utf-8")) > MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Submission too large")
+
+    title = (data.get("name") or data.get("task_intent") or data.get("rule_text", "")[:120] or "Untitled")[:500]
+    summary = (data.get("reasoning_summary") or data.get("prevention_rule") or data.get("rule_text", "") or "")[:2000]
     sid = str(uuid.uuid4())
 
     conn.execute(
@@ -74,7 +80,7 @@ def submit_contribution(request: ContributionRequest, conn=Depends(get_conn)) ->
             body_json,
             data.get("language", ""),
             data.get("framework", ""),
-            __import__("json").dumps(data.get("tags", [])),
+            json.dumps(data.get("tags", [])),
             request.submitted_by,
         ),
     )

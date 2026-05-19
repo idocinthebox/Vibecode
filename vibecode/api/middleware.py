@@ -7,12 +7,13 @@ Routes under ``/memory/pre-edit-check`` use the tighter
 
 Returns HTTP 429 with a JSON body when the limit is exceeded.
 """
+
 from __future__ import annotations
 
 import json
 import time
 from collections import defaultdict, deque
-from typing import Callable
+from collections.abc import Callable
 
 ENDPOINT_LIMITS: dict[str, str] = {
     "/memory/pre-edit-check": "pre_edit_check_rate_limit_per_min",
@@ -33,11 +34,6 @@ class RateLimitMiddleware:
         client = scope.get("client")
         if client:
             return client[0]
-        # Check X-Forwarded-For header (only for test environments — real service
-        # only accepts localhost so this header is informational).
-        for header_name, header_value in scope.get("headers", []):
-            if header_name.lower() == b"x-forwarded-for":
-                return header_value.decode("latin-1").split(",")[0].strip()
         return "unknown"
 
     def _get_limit(self, path: str) -> int:
@@ -60,6 +56,9 @@ class RateLimitMiddleware:
         # Evict entries older than 60 seconds
         while window and (now - window[0]) > 60.0:
             window.popleft()
+        if not window:
+            self._windows.pop(window_key, None)
+            window = self._windows[window_key]
 
         if len(window) >= limit:
             body = json.dumps(
@@ -76,6 +75,9 @@ class RateLimitMiddleware:
                     "headers": [
                         [b"content-type", b"application/json"],
                         [b"content-length", str(len(body)).encode()],
+                        [b"retry-after", b"60"],
+                        [b"x-ratelimit-limit", str(limit).encode()],
+                        [b"x-ratelimit-remaining", b"0"],
                     ],
                 }
             )

@@ -208,6 +208,10 @@ npm run compile
 npx vsce package --no-dependencies
 ```
 
+### Release Checklist
+
+- Run `scripts/build_release_graph.ps1` before tagging a release.
+
 ---
 
 ## Tech Stack

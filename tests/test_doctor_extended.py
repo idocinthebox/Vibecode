@@ -1,4 +1,5 @@
 """Tests for Phase 5: Extended doctor command."""
+
 from __future__ import annotations
 
 import pytest
@@ -15,6 +16,7 @@ def test_cmd_doctor_runs_without_error(temp_base, monkeypatch) -> None:
     # Silence output
     import io
     import sys
+
     captured = io.StringIO()
 
     from vibecode.cli.commands_doctor import cmd_doctor

@@ -1,4 +1,5 @@
 """Tests for Phase 5: Confidence decay background job."""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from vibecode.api.schemas import (
     AddProjectRuleRequest,
@@ -162,3 +162,12 @@ def pre_edit_check(request: PreEditCheckRequest, service: VibeCodeService = Depe
 
         raise HTTPException(status_code=429, detail=result)
     return result
+
+
+@router.get("/memory/recent")
+def recent_memory(
+    memory_type: str = Query(..., alias="type"),
+    limit: int = Query(25, ge=1, le=100),
+    service: VibeCodeService = Depends(get_service),
+) -> dict:
+    return service.get_recent_memory(memory_type=memory_type, limit=limit)

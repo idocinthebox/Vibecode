@@ -61,13 +61,13 @@ const INSTRUCTIONS_BODY = `## VibeCode Agent Instructions
 This workspace uses **VibeCode** — a local AI coding memory service that records
 success and failure patterns to prevent repeated mistakes and reduce token waste.
 
-When working in this workspace you SHOULD use the VibeCode MCP tools (exposed by
+When working in this workspace you MUST use the VibeCode MCP tools (exposed by
 the local service at http://127.0.0.1:8765 and via MCP stdio):
 
-1. **Before non-trivial edits** — call \`vibecode_search_memory\` (or
-   \`vibecode_inject_context\`) with the task intent and target file. Read the
-   returned failure warnings, project rules, and success patterns before
-   proposing code.
+1. **Before any non-trivial edit** — MUST call \`vibecode_inject_context\` (or
+  \`vibecode_search_memory\`) with the task intent and target file. Read the
+  returned failure warnings, project rules, and success patterns before
+  proposing code.
 2. **On build/test failure** — call \`vibecode_capture_failure\` with the same
    \`task_intent\` you used to inject context, plus the failing diff, the error
    output, and the affected files.

@@ -1,6 +1,7 @@
 # Phase 2 Build Report (2026-05-18)
 
 ## Scope
+
 Implemented Phase 2 features from Build Packet 6/7:
 - Full harvest source extractor coverage (ADR, CHANGELOG, linter config, inline rule comments)
 - Embedding-based near-duplicate filtering with no-op fallback
@@ -8,6 +9,7 @@ Implemented Phase 2 features from Build Packet 6/7:
 - Phase 2 backend and extension tests
 
 ## Backend Changes
+
 - Added extractors:
   - `vibecode/harvest/extractors/adr.py`
   - `vibecode/harvest/extractors/changelog_fix.py`
@@ -30,6 +32,7 @@ Implemented Phase 2 features from Build Packet 6/7:
   - `vibecode/models/memory_models.py`
 
 ## Extension Changes
+
 - Added harvest API types and methods:
   - `vibe-code-extension/src/types/api.ts`
   - `vibe-code-extension/src/services/apiClient.ts`
@@ -51,7 +54,9 @@ Implemented Phase 2 features from Build Packet 6/7:
   - `vibe-code-extension/package.json`
 
 ## Tests Added
+
 ### Backend
+
 - `tests/harvest/test_adr_extractor.py`
 - `tests/harvest/test_changelog_fix_extractor.py`
 - `tests/harvest/test_linter_config_extractor.py`
@@ -64,12 +69,14 @@ Implemented Phase 2 features from Build Packet 6/7:
   - `tests/fixtures/harvest/inline_rules.py`
 
 ### Extension
+
 - `vibe-code-extension/test/suite/harvestCommand.test.ts`
 - `vibe-code-extension/test/suite/harvestSidebar.test.ts`
 - Updated activation test expectation:
   - `vibe-code-extension/test/suite/commandRegistration.test.ts`
 
 ## Validation Results
+
 - Backend harvest/review subset:
   - `pytest tests/harvest tests/test_http_harvest_routes.py tests/test_routes_review.py`
   - Result: `14 passed`
@@ -81,8 +88,10 @@ Implemented Phase 2 features from Build Packet 6/7:
   - Result: `49 passing`
 
 ## Commits
+
 - No new commit created in this step.
 
 ## Follow-ups
+
 - Optional: add backend integration test that scans a temp repo containing both ADR + CHANGELOG and asserts typed outputs in one end-to-end scan.
 - Optional: add dedicated command to open `report_path` directly from harvest summary webview.

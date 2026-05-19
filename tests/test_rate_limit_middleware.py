@@ -1,4 +1,5 @@
 """Tests for Phase 5: Rate-limit middleware."""
+
 from __future__ import annotations
 
 import asyncio
@@ -61,6 +62,18 @@ def test_429_response_has_json_body() -> None:
     client.get("/health")
     resp = client.get("/health")
     assert resp.status_code == 429
+    assert resp.headers.get("retry-after") == "60"
     body = resp.json()
     assert body["error"] == "RATE_LIMITED"
     assert "limit_per_min" in body
+
+
+def test_xff_spoofing_does_not_bypass_limit() -> None:
+    app = _make_app(default_per_min=1)
+    client = TestClient(app, raise_server_exceptions=True)
+
+    first = client.get("/health", headers={"X-Forwarded-For": "203.0.113.1"})
+    second = client.get("/health", headers={"X-Forwarded-For": "198.51.100.2"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429

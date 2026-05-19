@@ -6,6 +6,7 @@ Run locally:
 Docker:
     See docker-compose.yml for the `pro-server` service.
 """
+
 from __future__ import annotations
 
 import os
@@ -16,6 +17,7 @@ from fastapi import FastAPI
 from server.pro.routes.contributions import router as contributions_router
 from server.pro.routes.moderation import router as moderation_router
 from server.pro.routes.search import router as search_router
+from vibecode.api.middleware import RateLimitMiddleware
 
 
 def create_pro_app(data_dir: str | Path | None = None) -> FastAPI:
@@ -29,6 +31,7 @@ def create_pro_app(data_dir: str | Path | None = None) -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+    app.add_middleware(RateLimitMiddleware, default_per_min=60, pre_edit_check_per_min=60)
     app.include_router(contributions_router)
     app.include_router(search_router)
     app.include_router(moderation_router)

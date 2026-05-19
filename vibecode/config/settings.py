@@ -24,6 +24,7 @@ class ServiceSettings(BaseSettings):
     service_host: str = "127.0.0.1"
     service_port: int = 8765
     storage_backend: str = "auto"  # auto, sqlite, json, postgres
+    data_dir: str = ""
     project_allowlist: str = ""  # comma-separated paths
     log_level: str = "INFO"
     auto_capture_enabled: bool = True

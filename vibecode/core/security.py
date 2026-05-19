@@ -21,6 +21,7 @@ SECRET_PATTERNS = [
     (r"(?i)(eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)", r"[REDACTED_SECRET]"),
     (r"(?i)(PRIVATE\s+KEY)", r"[REDACTED_SECRET]"),
     (r"(?i)(-----BEGIN\s+[^-]+-----).*?(-----END\s+[^-]+-----)", r"[REDACTED_SECRET]"),
+    (r"(?i)(sk_(?:live|test)_[A-Za-z0-9]{8,})", r"[REDACTED_SECRET]"),
     (r"(?i)(sk-[a-zA-Z0-9]{20,})", r"[REDACTED_SECRET]"),
     (r"(?i)(Bearer\s+[a-zA-Z0-9_\-]+)", r"[REDACTED_SECRET]"),
 ]

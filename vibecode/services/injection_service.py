@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from vibecode.config.settings import get_service_settings
-from vibecode.models import AgentProfile, FailurePattern, ProjectRule, SuccessPattern
 from vibecode.integrations.pro_sync import ProSyncAdapter
+from vibecode.models import AgentProfile, FailurePattern, ProjectRule, SuccessPattern
 from vibecode.services.search_service import SearchResult, SearchService
 from vibecode.services.token_service import TokenService
 
@@ -17,6 +17,7 @@ class InjectionService:
         self.base_dir = Path(base_dir)
         self.search_service = SearchService(self.base_dir, conn)
         self.token_service = TokenService()
+        self._last_remote_error = ""
 
     def inject(self, query: str, profile: AgentProfile) -> str:
         local_results = self.search_service.search(query)
@@ -30,10 +31,15 @@ class InjectionService:
         lines: list[str] = [
             "# VibeCode Agent Context",
             "",
-            f"## Task Query",
+            "## Task Query",
             query,
             "",
         ]
+
+        if not remote_results and self._last_remote_error:
+            lines.append("## Pro Databank Unavailable")
+            lines.append(f"- *Note:* {self._last_remote_error}")
+            lines.append("")
 
         sections: list[tuple[str, str, int]] = []
 
@@ -93,6 +99,7 @@ class InjectionService:
 
     def _search_remote(self, query: str) -> list[SearchResult]:
         """Fetch optional Pro databank matches and map them into SearchResult objects."""
+        self._last_remote_error = ""
         settings = get_service_settings()
         if not settings.pro_enabled:
             return []
@@ -103,6 +110,7 @@ class InjectionService:
 
         payload = adapter.search(query=query, max_results=10)
         if "error" in payload:
+            self._last_remote_error = str(payload["error"])
             return []
 
         terms = [t.lower() for t in query.split() if t.strip()]
@@ -233,22 +241,22 @@ class InjectionService:
         Returns:
             Merged list sorted by boosted score descending, deduplicated by title.
         """
-        seen_titles: set[str] = set()
+        seen_keys: set[tuple[str, str, str]] = set()
         merged: list[tuple[float, SearchResult]] = []
 
         for r in local:
             score = (r.confidence_score or 0.0) + local_first_boost
-            key = r.title.strip().lower()
-            if key not in seen_titles:
+            key = (r.result_type, r.title.strip().lower(), str(getattr(r.obj, "language", "") or "").lower())
+            if key not in seen_keys:
                 merged.append((score, r))
-                seen_titles.add(key)
+                seen_keys.add(key)
 
         for r in remote:
             score = r.confidence_score or 0.0
-            key = r.title.strip().lower()
-            if key not in seen_titles:
+            key = (r.result_type, r.title.strip().lower(), str(getattr(r.obj, "language", "") or "").lower())
+            if key not in seen_keys:
                 merged.append((score, r))
-                seen_titles.add(key)
+                seen_keys.add(key)
 
         merged.sort(key=lambda x: x[0], reverse=True)
         return [r for _, r in merged]

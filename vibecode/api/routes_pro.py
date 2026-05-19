@@ -5,6 +5,7 @@ POST /pro/retract                          — retract a submission
 GET  /pro/status                           — Pro connection status
 POST /pro/search                           — search the Pro databank
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -39,7 +40,11 @@ def pro_share(
     request: ProShareRequest,
     service: VibeCodeService = Depends(get_service),
 ) -> dict:
-    return service.pro_share(memory_type=memory_type, memory_id=memory_id)
+    return service.pro_share(
+        memory_type=memory_type,
+        memory_id=memory_id,
+        project_path=request.project_path or None,
+    )
 
 
 @router.post("/pro/retract")

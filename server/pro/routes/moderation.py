@@ -5,6 +5,7 @@ POST /databank/moderation/{id}/approve         — approve a pattern
 POST /databank/moderation/{id}/reject          — reject a pattern
 POST /databank/moderation/{id}/escalate        — escalate for human review
 """
+
 from __future__ import annotations
 
 import uuid
@@ -14,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from server.pro.db.schema import get_pro_connection
+from server.pro.security import require_bearer
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_bearer)])
 
 
 def get_conn():
@@ -63,7 +65,7 @@ def _moderate(
     if row is None:
         raise HTTPException(status_code=404, detail="Pattern not found")
 
-    new_state = {"approve": "approved", "reject": "rejected", "escalate": "pending"}.get(action, "pending")
+    new_state = {"approve": "approved", "reject": "rejected", "escalate": "escalated"}[action]
     conn.execute(
         "UPDATE databank_patterns SET review_state = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
         (new_state, pattern_id),
@@ -77,21 +79,15 @@ def _moderate(
 
 
 @router.post("/databank/moderation/{pattern_id}/approve")
-def approve_pattern(
-    pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)
-) -> dict:
+def approve_pattern(pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)) -> dict:
     return _moderate(pattern_id, "approve", request, conn)
 
 
 @router.post("/databank/moderation/{pattern_id}/reject")
-def reject_pattern(
-    pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)
-) -> dict:
+def reject_pattern(pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)) -> dict:
     return _moderate(pattern_id, "reject", request, conn)
 
 
 @router.post("/databank/moderation/{pattern_id}/escalate")
-def escalate_pattern(
-    pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)
-) -> dict:
+def escalate_pattern(pattern_id: str, request: ModerationActionRequest, conn=Depends(get_conn)) -> dict:
     return _moderate(pattern_id, "escalate", request, conn)

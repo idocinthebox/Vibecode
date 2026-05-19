@@ -1,4 +1,5 @@
 """CLI commands for the VibeCode Pro shared databank."""
+
 from __future__ import annotations
 
 import os
@@ -21,8 +22,7 @@ def cmd_pro_share(memory_type: str, memory_id: str, project: str | None) -> None
     adapter = _get_adapter()
     if not adapter.is_configured():
         print_error(
-            "Pro databank not configured. "
-            "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN environment variables."
+            "Pro databank not configured. Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN environment variables."
         )
         raise typer.Exit(1)
 

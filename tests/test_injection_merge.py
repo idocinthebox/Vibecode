@@ -1,4 +1,5 @@
 """Tests for Phase 4: Injection service merge-and-rerank."""
+
 from __future__ import annotations
 
 import uuid
@@ -13,6 +14,7 @@ def _make_result(
     result_type: str = "failure",
     confidence: float = 0.8,
     severity: str = "medium",
+    language: str = "python",
 ) -> SearchResult:
     obj = FailurePattern(
         failure_id=str(uuid.uuid4()),
@@ -21,6 +23,7 @@ def _make_result(
         failure_reason="some reason",
         prevention_rule="some rule",
         corrected_approach="",
+        language=language,
         severity=severity,
         confidence_score=confidence,
         confidence=confidence,
@@ -65,3 +68,35 @@ def test_merge_sorted_by_score_desc() -> None:
     assert merged[0].title == "R1"
     assert merged[1].title == "L1"
     assert merged[2].title == "R2"
+
+
+def test_merge_keeps_same_title_with_different_language() -> None:
+    local = [_make_result("SharedTitle", language="python")]
+    remote = [_make_result("SharedTitle", language="typescript")]
+
+    merged = InjectionService._merge_and_rerank(local, remote)
+
+    assert len(merged) == 2
+
+
+def test_inject_includes_pro_unavailable_note(tmp_path, monkeypatch) -> None:
+    from vibecode.models import AgentProfile
+
+    service = InjectionService(tmp_path)
+    monkeypatch.setattr(service.search_service, "search", lambda _query: [])
+    service._last_remote_error = "Upstream service unavailable"
+    monkeypatch.setattr(service, "_search_remote", lambda _query: [])
+
+    profile = AgentProfile(
+        profile_id=str(uuid.uuid4()),
+        name="test",
+        target_agent="generic",
+        max_context_tokens=1000,
+        include_success_patterns=True,
+        include_failure_patterns=True,
+        include_project_rules=True,
+    )
+
+    markdown = service.inject("failing command", profile)
+    assert "## Pro Databank Unavailable" in markdown
+    assert "Upstream service unavailable" in markdown

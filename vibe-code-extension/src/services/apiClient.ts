@@ -29,6 +29,7 @@ import {
   PreCommandCheckResponse,
   ShareToDatabankRequest,
   ShareToDatabankResponse,
+  RecentMemoryResponse,
 } from '../types/api';
 import { createError } from '../utils/errors';
 
@@ -117,9 +118,14 @@ export class VibeCodeApiClient {
   async shareToDatabank(request: ShareToDatabankRequest): Promise<ShareToDatabankResponse> {
     return this._post<ShareToDatabankResponse>(
       `/pro/share/${encodeURIComponent(request.memory_type)}/${encodeURIComponent(request.memory_id)}`,
-      {},
+      { project_path: request.project_path ?? '' },
       15000
     );
+  }
+
+  async recentMemory(memoryType: string, limit: number = 25): Promise<RecentMemoryResponse> {
+    const query = `?type=${encodeURIComponent(memoryType)}&limit=${encodeURIComponent(String(limit))}`;
+    return this._get<RecentMemoryResponse>(`/memory/recent${query}`, 10000);
   }
 
   async preCommandCheck(request: PreCommandCheckRequest): Promise<PreCommandCheckResponse> {

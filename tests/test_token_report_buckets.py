@@ -1,4 +1,5 @@
 """Tests for Phase 5: Token report with source buckets."""
+
 from __future__ import annotations
 
 import json
@@ -17,9 +18,7 @@ def _prepare_service(temp_base):
     create_schema(conn)
     conn.close()
 
-    (temp_base / "allowed_projects.json").write_text(
-        json.dumps({"allowed_projects": [str(temp_base)]})
-    )
+    (temp_base / "allowed_projects.json").write_text(json.dumps({"allowed_projects": [str(temp_base)]}))
     return VibeCodeService(base_dir=temp_base)
 
 

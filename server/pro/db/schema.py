@@ -2,6 +2,7 @@
 
 Provides DDL and helpers for the shared pattern databank.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -21,7 +22,7 @@ CREATE TABLE IF NOT EXISTS databank_patterns (
     framework     TEXT NOT NULL DEFAULT '',
     tags          TEXT NOT NULL DEFAULT '[]',
     submitted_by  TEXT NOT NULL DEFAULT 'anonymous',
-    review_state  TEXT NOT NULL DEFAULT 'pending' CHECK(review_state IN ('pending','approved','rejected')),
+    review_state  TEXT NOT NULL DEFAULT 'pending' CHECK(review_state IN ('pending','approved','rejected','escalated')),
     usefulness    REAL NOT NULL DEFAULT 0.0,
     feedback_count INTEGER NOT NULL DEFAULT 0,
     is_active     INTEGER NOT NULL DEFAULT 1,
@@ -48,6 +49,27 @@ CREATE TABLE IF NOT EXISTS moderation_log (
 CREATE INDEX IF NOT EXISTS idx_patterns_memory_type ON databank_patterns(memory_type, review_state, is_active);
 CREATE INDEX IF NOT EXISTS idx_patterns_language ON databank_patterns(language);
 CREATE INDEX IF NOT EXISTS idx_feedback_pattern ON databank_feedback(pattern_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS databank_patterns_fts USING fts5(
+        title, summary, language, framework, content='databank_patterns', content_rowid='rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS databank_patterns_ai AFTER INSERT ON databank_patterns BEGIN
+    INSERT INTO databank_patterns_fts(rowid, title, summary, language, framework)
+    VALUES (new.rowid, new.title, new.summary, new.language, new.framework);
+END;
+
+CREATE TRIGGER IF NOT EXISTS databank_patterns_ad AFTER DELETE ON databank_patterns BEGIN
+    INSERT INTO databank_patterns_fts(databank_patterns_fts, rowid, title, summary, language, framework)
+    VALUES('delete', old.rowid, old.title, old.summary, old.language, old.framework);
+END;
+
+CREATE TRIGGER IF NOT EXISTS databank_patterns_au AFTER UPDATE ON databank_patterns BEGIN
+    INSERT INTO databank_patterns_fts(databank_patterns_fts, rowid, title, summary, language, framework)
+    VALUES('delete', old.rowid, old.title, old.summary, old.language, old.framework);
+    INSERT INTO databank_patterns_fts(rowid, title, summary, language, framework)
+    VALUES (new.rowid, new.title, new.summary, new.language, new.framework);
+END;
 """
 
 
@@ -55,11 +77,71 @@ def get_pro_db_path(data_dir: Path) -> Path:
     return data_dir / "pro_databank.db"
 
 
+def _ensure_escalated_state(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='databank_patterns'"
+    ).fetchone()
+    create_sql = (row[0] or "") if row else ""
+    if "escalated" in create_sql:
+        return
+
+    try:
+        conn.execute("UPDATE databank_patterns SET review_state='escalated' WHERE 0")
+        conn.commit()
+        return
+    except sqlite3.IntegrityError:
+        pass
+
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS databank_patterns_ai;
+        DROP TRIGGER IF EXISTS databank_patterns_ad;
+        DROP TRIGGER IF EXISTS databank_patterns_au;
+        DROP TABLE IF EXISTS databank_patterns_fts;
+        DROP INDEX IF EXISTS idx_patterns_memory_type;
+        DROP INDEX IF EXISTS idx_patterns_language;
+
+        ALTER TABLE databank_patterns RENAME TO _old_databank_patterns;
+
+        CREATE TABLE databank_patterns (
+            id            TEXT PRIMARY KEY,
+            memory_type   TEXT NOT NULL CHECK(memory_type IN ('success_pattern','failure_pattern','project_rule')),
+            title         TEXT NOT NULL,
+            summary       TEXT NOT NULL,
+            body_json     TEXT NOT NULL DEFAULT '{}',
+            language      TEXT NOT NULL DEFAULT '',
+            framework     TEXT NOT NULL DEFAULT '',
+            tags          TEXT NOT NULL DEFAULT '[]',
+            submitted_by  TEXT NOT NULL DEFAULT 'anonymous',
+            review_state  TEXT NOT NULL DEFAULT 'pending' CHECK(review_state IN ('pending','approved','rejected','escalated')),
+            usefulness    REAL NOT NULL DEFAULT 0.0,
+            feedback_count INTEGER NOT NULL DEFAULT 0,
+            is_active     INTEGER NOT NULL DEFAULT 1,
+            created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+
+        INSERT INTO databank_patterns (
+            id, memory_type, title, summary, body_json, language, framework, tags,
+            submitted_by, review_state, usefulness, feedback_count, is_active, created_at, updated_at
+        )
+        SELECT
+            id, memory_type, title, summary, body_json, language, framework, tags,
+            submitted_by, review_state, usefulness, feedback_count, is_active, created_at, updated_at
+        FROM _old_databank_patterns;
+
+        DROP TABLE _old_databank_patterns;
+        """
+    )
+
+
 def get_pro_connection(data_dir: Path) -> sqlite3.Connection:
     db_path = get_pro_db_path(data_dir)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.executescript(PRO_SCHEMA_SQL)
+    _ensure_escalated_state(conn)
     conn.executescript(PRO_SCHEMA_SQL)
     conn.commit()
     return conn

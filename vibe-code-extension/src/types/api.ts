@@ -268,12 +268,24 @@ export type VibeCodeErrorCode =
 export interface ShareToDatabankRequest {
   memory_type: 'success_pattern' | 'failure_pattern' | 'project_rule';
   memory_id: string;
+  project_path?: string;
 }
 
 export interface ShareToDatabankResponse {
   submission_id: string;
   review_state: 'pending' | 'approved' | 'rejected';
   ok: boolean;
+}
+
+export interface RecentMemoryItem {
+  memory_id: string;
+  title: string;
+  source_type?: string;
+}
+
+export interface RecentMemoryResponse {
+  items: RecentMemoryItem[];
+  total: number;
 }
 
 // ---------------------------------------------------------------------------

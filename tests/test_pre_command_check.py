@@ -1,7 +1,9 @@
 """Tests for Phase 8: check_command and recall_on_error service methods."""
+
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from tests.conftest import temp_base

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 import uuid
@@ -35,6 +36,31 @@ from vibecode.services.export_service import ExportService
 from vibecode.services.injection_service import InjectionService
 from vibecode.services.search_service import SearchResult, SearchService
 from vibecode.services.token_service import TokenService
+
+
+logger = logging.getLogger(__name__)
+
+
+SHARE_ALLOW_LIST_FAILURE = (
+    "failure_id",
+    "task_intent",
+    "bad_suggestion",
+    "failure_reason",
+    "prevention_rule",
+    "corrected_approach",
+    "language",
+    "framework",
+    "severity",
+)
+
+SHARE_ALLOW_LIST_SUCCESS = (
+    "pattern_id",
+    "name",
+    "intent_description",
+    "language",
+    "framework",
+    "reasoning_summary",
+)
 
 
 class VibeCodeService:
@@ -923,6 +949,58 @@ class VibeCodeService:
             "total": len(out),
         }
 
+    def get_recent_memory(self, memory_type: str, limit: int = 25) -> dict[str, Any]:
+        """Return recent memory IDs and titles for a given memory type."""
+        if self.conn is None:
+            return {"items": [], "total": 0}
+
+        capped_limit = max(1, min(limit, 100))
+        if memory_type == "failure_pattern":
+            rows = self.conn.execute(
+                """
+                SELECT failure_id AS memory_id, task_intent AS title, source_type
+                FROM failure_patterns
+                WHERE is_active = 1
+                ORDER BY COALESCE(last_seen_at, updated_at, created_at) DESC
+                LIMIT ?
+                """,
+                (capped_limit,),
+            ).fetchall()
+        elif memory_type == "success_pattern":
+            rows = self.conn.execute(
+                """
+                SELECT pattern_id AS memory_id, name AS title, source_type
+                FROM success_patterns
+                WHERE is_active = 1
+                ORDER BY COALESCE(last_seen_at, updated_at, created_at) DESC
+                LIMIT ?
+                """,
+                (capped_limit,),
+            ).fetchall()
+        elif memory_type == "project_rule":
+            rows = self.conn.execute(
+                """
+                SELECT rule_id AS memory_id, rule_text AS title, source_type
+                FROM project_rules
+                WHERE is_active = 1
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (capped_limit,),
+            ).fetchall()
+        else:
+            return self._error("INVALID_MEMORY_TYPE")
+
+        items = [
+            {
+                "memory_id": row["memory_id"],
+                "title": row["title"],
+                "source_type": row["source_type"] or "",
+            }
+            for row in rows
+        ]
+        return {"items": items, "total": len(items)}
+
     # ------------------------------------------------------------------
     # Phase 4: Pro Databank integration
     # ------------------------------------------------------------------
@@ -936,11 +1014,25 @@ class VibeCodeService:
             token=self.settings.pro_token,
         )
 
-    def pro_share(self, memory_type: str, memory_id: str) -> dict[str, Any]:
+    def _project_allowed(self, project_path: str) -> bool:
+        return self.allowlist.is_allowed(project_path)
+
+    @staticmethod
+    def _project_row(row: sqlite3.Row, allow: tuple[str, ...]) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for key in allow:
+            value = row[key] if key in row.keys() else ""
+            data[key] = redact_secrets(value) if isinstance(value, str) else value
+        return data
+
+    def pro_share(self, memory_type: str, memory_id: str, project_path: str | None = None) -> dict[str, Any]:
         """Share a local pattern to the Pro databank."""
         adapter = self._get_pro_adapter()
         if not adapter.is_configured():
             return self._error("PRO_NOT_CONFIGURED")
+
+        if project_path is not None and not self._project_allowed(project_path):
+            return self._error("PROJECT_NOT_ALLOWED", project_path=project_path)
 
         if self.conn is None:
             return self._error("STORAGE_NOT_INITIALIZED")
@@ -952,26 +1044,25 @@ class VibeCodeService:
             ).fetchone()
             if row is None:
                 return self._error("NOT_FOUND")
-            data = {
-                k: v for k, v in dict(row).items()
-                if k not in ("is_active", "content_hash", "agent_source", "source_ref")
-            }
+            data = self._project_row(row, SHARE_ALLOW_LIST_FAILURE)
         elif memory_type == "success_pattern":
             row = self.conn.execute(
                 "SELECT * FROM success_patterns WHERE pattern_id = ? AND is_active = 1", (memory_id,)
             ).fetchone()
             if row is None:
                 return self._error("NOT_FOUND")
-            data = {
-                k: v for k, v in dict(row).items()
-                if k not in ("is_active", "content_hash", "agent_source", "source_ref")
-            }
+            data = self._project_row(row, SHARE_ALLOW_LIST_SUCCESS)
         else:
             return self._error("INVALID_MEMORY_TYPE")
 
-        result = adapter.submit(memory_type=memory_type, data=data)
+        try:
+            result = adapter.submit(memory_type=memory_type, data=data)
+        except Exception as exc:
+            logger.warning("Pro share raised for %s/%s: %s", memory_type, memory_id, exc)
+            return self._error("PRO_REQUEST_FAILED")
         if "error" in result:
-            return {"error": "PRO_SUBMIT_FAILED", "message": result["error"]}
+            logger.warning("Pro share failed for %s/%s: %s", memory_type, memory_id, result.get("error"))
+            return self._error("PRO_REQUEST_FAILED")
         return result
 
     def pro_retract(self, submission_id: str) -> dict[str, Any]:
@@ -979,20 +1070,29 @@ class VibeCodeService:
         adapter = self._get_pro_adapter()
         if not adapter.is_configured():
             return self._error("PRO_NOT_CONFIGURED")
-        result = adapter.retract(submission_id)
+        try:
+            result = adapter.retract(submission_id)
+        except Exception as exc:
+            logger.warning("Pro retract raised for %s: %s", submission_id, exc)
+            return self._error("PRO_REQUEST_FAILED")
         if "error" in result:
-            return {"error": "PRO_RETRACT_FAILED", "message": result["error"]}
+            logger.warning("Pro retract failed for %s: %s", submission_id, result.get("error"))
+            return self._error("PRO_REQUEST_FAILED")
         return result
 
     def pro_status(self) -> dict[str, Any]:
         """Return Pro databank connection status."""
         adapter = self._get_pro_adapter()
         if not adapter.is_configured():
-            return {
-                "configured": False,
-                "message": "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN to enable.",
-            }
-        result = adapter.get_status()
+            return self._error("PRO_NOT_CONFIGURED")
+        try:
+            result = adapter.get_status()
+        except Exception as exc:
+            logger.warning("Pro status request raised: %s", exc)
+            return self._error("PRO_REQUEST_FAILED")
+        if "error" in result:
+            logger.warning("Pro status request failed: %s", result.get("error"))
+            return self._error("PRO_REQUEST_FAILED")
         result["configured"] = True
         return result
 
@@ -1001,7 +1101,15 @@ class VibeCodeService:
         adapter = self._get_pro_adapter()
         if not adapter.is_configured():
             return self._error("PRO_NOT_CONFIGURED")
-        return adapter.search(query=query, max_results=max_results)
+        try:
+            result = adapter.search(query=query, max_results=max_results)
+        except Exception as exc:
+            logger.warning("Pro search raised: %s", exc)
+            return self._error("PRO_REQUEST_FAILED")
+        if "error" in result:
+            logger.warning("Pro search failed: %s", result.get("error"))
+            return self._error("PRO_REQUEST_FAILED")
+        return result
 
     # ------------------------------------------------------------------
     # Phase 5: Extended token report with source buckets
@@ -1020,10 +1128,9 @@ class VibeCodeService:
         base_report = self.get_token_report(project_path=project_path, days=days)
 
         if self.conn is None:
-            buckets = {
-                "local": 0, "harvested": 0, "auto": 0, "pro_team": 0, "pro_global": 0
-            }
+            buckets = {"local": 0, "harvested": 0, "auto": 0, "pro_team": 0, "pro_global": 0}
         else:
+
             def _count(table: str, id_col: str, pattern: str) -> int:
                 row = self.conn.execute(  # type: ignore[union-attr]
                     f"SELECT COUNT(*) AS c FROM {table} WHERE is_active = 1 AND source_type LIKE ?",
@@ -1086,6 +1193,10 @@ class VibeCodeService:
             "PRO_NOT_CONFIGURED": (
                 "Pro databank not configured.",
                 "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN environment variables.",
+            ),
+            "PRO_REQUEST_FAILED": (
+                "Pro databank request failed.",
+                "Check service logs and 'vibecode doctor'.",
             ),
         }
         msg, fix = messages.get(code, ("Unknown error.", ""))

@@ -33,7 +33,7 @@ export class TerminalRecallService {
       return;
     }
 
-    this.disposable = eventApi((e) => {
+    this.disposable = eventApi(async (e) => {
       const exitCode = e.exitCode ?? 0;
       if (exitCode === 0) {
         return;
@@ -46,20 +46,42 @@ export class TerminalRecallService {
       }
 
       const command = e.execution?.commandLine?.value ?? '';
+      const tail = await this._captureTail(e.execution);
+      const errorOutput = tail || `Command failed: ${command}`;
       const folders = this.workspaceFolders();
       const projectPath = folders?.[0]?.uri?.fsPath;
 
       // Fire-and-forget with error swallow — must never block or crash the extension
-      this._recallForError(command, projectPath).catch(() => {/* silently ignore */});
+      this._recallForError(errorOutput, command, projectPath).catch(() => {/* silently ignore */});
     });
 
     context.subscriptions.push(this.disposable);
   }
 
-  private async _recallForError(command: string, projectPath: string | undefined): Promise<void> {
+  private async _captureTail(execution: any, maxBytes = 4096): Promise<string> {
+    if (typeof execution?.read !== 'function') {
+      return '';
+    }
+
+    let buf = '';
+    try {
+      for await (const chunk of execution.read()) {
+        buf += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        if (buf.length > maxBytes * 4) {
+          buf = buf.slice(-maxBytes * 2);
+        }
+      }
+    } catch {
+      // ignore terminal stream failures
+    }
+
+    return buf.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '').slice(-maxBytes);
+  }
+
+  private async _recallForError(errorOutput: string, command: string, projectPath: string | undefined): Promise<void> {
     try {
       const result = await this.api.autoRecallOnError({
-        error_output: `Command failed: ${command}`,
+        error_output: errorOutput,
         project_path: projectPath,
         command,
       });
