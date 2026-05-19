@@ -91,3 +91,24 @@ class MCPTools:
 
     def health_check(self) -> dict:
         return self.service.health_check()
+
+    def check_command(
+        self,
+        command: str,
+        project_path: str | None = None,
+    ) -> dict:
+        """Phase 8: check a shell command against failure patterns before execution."""
+        return self.service.check_command(command=command, project_path=project_path)
+
+    def recall_on_error(
+        self,
+        error_output: str,
+        project_path: str | None = None,
+        command: str | None = None,
+    ) -> dict:
+        """Phase 8: search memory for patterns matching terminal error output."""
+        return self.service.recall_on_error(
+            error_output=error_output,
+            project_path=project_path,
+            command=command,
+        )

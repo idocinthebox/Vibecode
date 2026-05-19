@@ -260,3 +260,63 @@ export type VibeCodeErrorCode =
   | 'INVALID_RESPONSE'
   | 'NO_SELECTION'
   | 'NO_WORKSPACE';
+
+// ---------------------------------------------------------------------------
+// Phase 4: Pro databank
+// ---------------------------------------------------------------------------
+
+export interface ShareToDatabankRequest {
+  memory_type: 'success_pattern' | 'failure_pattern' | 'project_rule';
+  memory_id: string;
+}
+
+export interface ShareToDatabankResponse {
+  submission_id: string;
+  review_state: 'pending' | 'approved' | 'rejected';
+  ok: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8: Pre-command check and auto-recall
+// ---------------------------------------------------------------------------
+
+export interface PreCommandCheckRequest {
+  command: string;
+  project_path?: string;
+}
+
+export interface PreCommandCheckMatch {
+  failure_id: string;
+  task_intent: string;
+  prevention_rule: string;
+  corrected_approach?: string;
+  severity: string;
+  confidence_score: number;
+}
+
+export interface PreCommandCheckResponse {
+  command: string;
+  warning_count: number;
+  matches: PreCommandCheckMatch[];
+}
+
+export interface AutoRecallRequest {
+  error_output: string;
+  project_path?: string;
+  command?: string;
+}
+
+export interface AutoRecallMatch {
+  memory_type: string;
+  memory_id: string;
+  title: string;
+  summary: string;
+  why_matched: string;
+  confidence_score?: number;
+}
+
+export interface AutoRecallResponse {
+  query: string;
+  total: number;
+  results: AutoRecallMatch[];
+}

@@ -22,6 +22,7 @@ from vibecode.cli.commands_mcp import (
     cmd_mcp_write_kimi_config,
 )
 from vibecode.cli.commands_memory import cmd_inject, cmd_search
+from vibecode.cli.commands_pro import cmd_pro_retract, cmd_pro_share, cmd_pro_status
 from vibecode.cli.commands_project import cmd_project_allow, cmd_project_list, cmd_project_remove
 from vibecode.cli.commands_report import cmd_report
 from vibecode.cli.commands_rules import cmd_add_rule
@@ -41,12 +42,14 @@ service_app = typer.Typer(name="service", help="Local HTTP service commands")
 mcp_app = typer.Typer(name="mcp", help="MCP server commands")
 project_app = typer.Typer(name="project", help="Project allowlist commands")
 harvest_app = typer.Typer(name="harvest", help="Knowledge harvester commands")
+pro_app = typer.Typer(name="pro", help="Pro databank commands")
 
 app.add_typer(config_app)
 app.add_typer(service_app)
 app.add_typer(mcp_app)
 app.add_typer(project_app)
 app.add_typer(harvest_app)
+app.add_typer(pro_app)
 
 
 @app.callback()
@@ -438,3 +441,32 @@ def harvest_sources(
     if not list_sources:
         return
     cmd_harvest_sources(json_output)
+
+
+# ---------------------------------------------------------------------------
+# Pro subcommands
+# ---------------------------------------------------------------------------
+
+
+@pro_app.command("share")
+def pro_share(
+    memory_type: str = typer.Argument(..., help="failure_pattern or success_pattern"),
+    memory_id: str = typer.Argument(..., help="The memory ID to share"),
+    project: str | None = typer.Option(None, "--project"),
+) -> None:
+    """Share a local pattern with the Pro databank."""
+    cmd_pro_share(memory_type, memory_id, project)
+
+
+@pro_app.command("retract")
+def pro_retract(
+    submission_id: str = typer.Argument(..., help="Submission ID returned when sharing"),
+) -> None:
+    """Retract a previously shared pattern from the Pro databank."""
+    cmd_pro_retract(submission_id)
+
+
+@pro_app.command("status")
+def pro_status() -> None:
+    """Show Pro databank connection and account status."""
+    cmd_pro_status()

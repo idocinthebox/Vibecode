@@ -201,6 +201,10 @@ class TokenReportResponse(BaseModel):
     days: int
 
 
+class TokenReportBucketsResponse(TokenReportResponse):
+    source_buckets: dict[str, int] = Field(default_factory=dict)
+
+
 class HarvestScanRequest(SafePathModel):
     project_path: str
     include: list[str] = Field(default_factory=list)

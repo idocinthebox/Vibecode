@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any
 
+from vibecode.config.settings import get_service_settings
 from vibecode.models import AgentProfile, FailurePattern, ProjectRule, SuccessPattern
+from vibecode.integrations.pro_sync import ProSyncAdapter
 from vibecode.services.search_service import SearchResult, SearchService
 from vibecode.services.token_service import TokenService
 
@@ -16,7 +19,9 @@ class InjectionService:
         self.token_service = TokenService()
 
     def inject(self, query: str, profile: AgentProfile) -> str:
-        results = self.search_service.search(query)
+        local_results = self.search_service.search(query)
+        remote_results = self._search_remote(query)
+        results = self._merge_and_rerank(local_results, remote_results) if remote_results else local_results
 
         failures = [r for r in results if r.result_type == "failure"]
         rules = [r for r in results if r.result_type == "rule"]
@@ -86,6 +91,81 @@ class InjectionService:
 
         return "\n".join(lines)
 
+    def _search_remote(self, query: str) -> list[SearchResult]:
+        """Fetch optional Pro databank matches and map them into SearchResult objects."""
+        settings = get_service_settings()
+        if not settings.pro_enabled:
+            return []
+
+        adapter = ProSyncAdapter(endpoint=settings.pro_endpoint, token=settings.pro_token)
+        if not adapter.is_configured():
+            return []
+
+        payload = adapter.search(query=query, max_results=10)
+        if "error" in payload:
+            return []
+
+        terms = [t.lower() for t in query.split() if t.strip()]
+        out: list[SearchResult] = []
+        for item in payload.get("results", []):
+            mapped = self._map_remote_item(item, terms)
+            if mapped is not None:
+                out.append(mapped)
+        return out
+
+    @staticmethod
+    def _map_remote_item(item: dict[str, Any], terms: list[str]) -> SearchResult | None:
+        memory_type = item.get("memory_type", "")
+        rid = item.get("submission_id") or str(uuid.uuid4())
+        title = item.get("title", "")
+        summary = item.get("summary", "")
+        confidence = float(item.get("usefulness", item.get("confidence_score", 0.6)))
+
+        if memory_type == "failure_pattern":
+            obj = FailurePattern(
+                failure_id=rid,
+                task_intent=title or "Remote failure pattern",
+                bad_suggestion="",
+                failure_reason=summary or "Remote failure pattern",
+                prevention_rule=summary or "Review the related Pro pattern.",
+                corrected_approach="",
+                language=item.get("language", ""),
+                framework=item.get("framework", ""),
+                severity="medium",
+                confidence_score=confidence,
+                source_type="pro:global",
+                source_ref=rid,
+            )
+            return SearchResult("failure", obj, terms)
+
+        if memory_type == "success_pattern":
+            obj = SuccessPattern(
+                pattern_id=rid,
+                name=title or "Remote success pattern",
+                intent_description=summary or title or "Remote success pattern",
+                language=item.get("language", ""),
+                framework=item.get("framework", ""),
+                reasoning_summary=summary or title or "Remote success pattern",
+                confidence_score=confidence,
+                confidence=confidence,
+                source_type="pro:global",
+                source_ref=rid,
+            )
+            return SearchResult("success", obj, terms)
+
+        if memory_type == "project_rule":
+            obj = ProjectRule(
+                rule_id=rid,
+                rule_text=title or summary or "Remote project rule",
+                rule_type="failure_prevention",
+                severity="medium",
+                source_type="pro:global",
+                source_ref=rid,
+            )
+            return SearchResult("rule", obj, terms)
+
+        return None
+
     @staticmethod
     def _format_failures(results: list[SearchResult]) -> str:
         lines: list[str] = []
@@ -132,3 +212,43 @@ class InjectionService:
             trimmed.append(line)
             current += line_tokens
         return "\n".join(trimmed)
+
+    @staticmethod
+    def _merge_and_rerank(
+        local: list[SearchResult],
+        remote: list[SearchResult],
+        local_first_boost: float = 0.25,
+    ) -> list[SearchResult]:
+        """Merge local and remote search results with a local-first boost.
+
+        Local results receive a +*local_first_boost* additive boost to their
+        confidence score before sorting so that locally-validated patterns are
+        preferred over remote (team/global) patterns of equal quality.
+
+        Args:
+            local: Results from the local SQLite store.
+            remote: Results from the Pro databank.
+            local_first_boost: Additive boost applied to local confidence scores.
+
+        Returns:
+            Merged list sorted by boosted score descending, deduplicated by title.
+        """
+        seen_titles: set[str] = set()
+        merged: list[tuple[float, SearchResult]] = []
+
+        for r in local:
+            score = (r.confidence_score or 0.0) + local_first_boost
+            key = r.title.strip().lower()
+            if key not in seen_titles:
+                merged.append((score, r))
+                seen_titles.add(key)
+
+        for r in remote:
+            score = r.confidence_score or 0.0
+            key = r.title.strip().lower()
+            if key not in seen_titles:
+                merged.append((score, r))
+                seen_titles.add(key)
+
+        merged.sort(key=lambda x: x[0], reverse=True)
+        return [r for _, r in merged]

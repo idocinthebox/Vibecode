@@ -23,6 +23,12 @@ import {
   SearchMemoryRequest,
   SearchMemoryResponse,
   TokenReportResponse,
+  AutoRecallRequest,
+  AutoRecallResponse,
+  PreCommandCheckRequest,
+  PreCommandCheckResponse,
+  ShareToDatabankRequest,
+  ShareToDatabankResponse,
 } from '../types/api';
 import { createError } from '../utils/errors';
 
@@ -106,6 +112,22 @@ export class VibeCodeApiClient {
 
   async preEditCheck(request: PreEditCheckRequest): Promise<PreEditCheckResponse> {
     return this._post<PreEditCheckResponse>('/memory/pre-edit-check', request, 15000);
+  }
+
+  async shareToDatabank(request: ShareToDatabankRequest): Promise<ShareToDatabankResponse> {
+    return this._post<ShareToDatabankResponse>(
+      `/pro/share/${encodeURIComponent(request.memory_type)}/${encodeURIComponent(request.memory_id)}`,
+      {},
+      15000
+    );
+  }
+
+  async preCommandCheck(request: PreCommandCheckRequest): Promise<PreCommandCheckResponse> {
+    return this._post<PreCommandCheckResponse>('/memory/check-command', request, 10000);
+  }
+
+  async autoRecallOnError(request: AutoRecallRequest): Promise<AutoRecallResponse> {
+    return this._post<AutoRecallResponse>('/memory/recall-on-error', request, 15000);
   }
 
   private async _get<T>(path: string, timeout: number): Promise<T> {

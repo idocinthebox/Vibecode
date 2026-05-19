@@ -13,6 +13,7 @@ from vibecode.api.schemas import (
     RuleResponse,
     SearchMemoryRequest,
     SearchMemoryResponse,
+    TokenReportBucketsResponse,
     TokenReportRequest,
     TokenReportResponse,
 )
@@ -134,6 +135,14 @@ def add_rule(request: AddProjectRuleRequest, service: VibeCodeService = Depends(
 @router.post("/reports/tokens", response_model=TokenReportResponse)
 def token_report(request: TokenReportRequest, service: VibeCodeService = Depends(get_service)) -> dict:
     return service.get_token_report(
+        project_path=request.project_path,
+        days=request.days,
+    )
+
+
+@router.post("/reports/tokens/buckets", response_model=TokenReportBucketsResponse)
+def token_report_buckets(request: TokenReportRequest, service: VibeCodeService = Depends(get_service)) -> dict:
+    return service.get_token_report_buckets(
         project_path=request.project_path,
         days=request.days,
     )

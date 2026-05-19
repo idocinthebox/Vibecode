@@ -819,6 +819,247 @@ class VibeCodeService:
                 confidence=decision.confidence,
             )
 
+    # ------------------------------------------------------------------
+    # Phase 8: Pre-command check and auto-recall on error
+    # ------------------------------------------------------------------
+
+    def check_command(
+        self,
+        command: str,
+        project_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Search failure patterns for any that match the given shell *command*.
+
+        Returns a lightweight preview (no full body) so callers can warn the
+        user before they run the command.
+        """
+        if not command.strip():
+            return {"command": command, "matches": [], "warning_count": 0}
+
+        results = self.search.search(command)
+        failures = [r for r in results if r.result_type == "failure"][:5]
+
+        matches = []
+        for r in failures:
+            f = r.obj
+            matches.append(
+                {
+                    "failure_id": r.memory_id,
+                    "title": r.title,
+                    "prevention_rule": getattr(f, "prevention_rule", ""),
+                    "severity": getattr(f, "severity", "medium"),
+                    "confidence_score": r.confidence_score,
+                }
+            )
+
+        self._audit(
+            actor="mcp",
+            action="memory.check_command",
+            target_type="command",
+            target_id=redact_secrets(command)[:120],
+            project_path=project_path,
+            meta={"match_count": len(matches)},
+        )
+
+        return {
+            "command": command,
+            "matches": matches,
+            "warning_count": len(matches),
+        }
+
+    def recall_on_error(
+        self,
+        error_output: str,
+        project_path: str | None = None,
+        command: str | None = None,
+    ) -> dict[str, Any]:
+        """Search memory for patterns that match a terminal error output.
+
+        Combines *error_output* with the optional *command* as a single query
+        so that both contextual clues are used.
+        """
+        query_parts = []
+        if command:
+            query_parts.append(command.strip())
+        if error_output:
+            # Use first 300 chars of error output as the search query
+            query_parts.append(error_output.strip()[:300])
+        query = " ".join(query_parts) or "error"
+
+        results = self.search.search(query)
+        failures = [r for r in results if r.result_type == "failure"][:8]
+        rules = [r for r in results if r.result_type == "rule"][:3]
+
+        type_map = {"failure": "failure_pattern", "rule": "project_rule"}
+        out: list[dict[str, Any]] = []
+        for r in failures + rules:
+            item: dict[str, Any] = {
+                "memory_type": type_map.get(r.result_type, r.result_type),
+                "memory_id": r.memory_id,
+                "title": r.title,
+                "summary": r.summary,
+                "why_matched": r.why_matched,
+                "severity": r.severity,
+                "confidence_score": r.confidence_score,
+            }
+            if r.result_type == "failure":
+                f = r.obj
+                item["prevention_rule"] = getattr(f, "prevention_rule", "")
+                item["corrected_approach"] = getattr(f, "corrected_approach", "")
+            out.append(item)
+
+        self._audit(
+            actor="mcp",
+            action="memory.recall_on_error",
+            target_type="error",
+            target_id=redact_secrets(query)[:120],
+            project_path=project_path,
+            meta={"match_count": len(out), "command": command},
+        )
+
+        return {
+            "query": query,
+            "results": out,
+            "total": len(out),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 4: Pro Databank integration
+    # ------------------------------------------------------------------
+
+    def _get_pro_adapter(self):
+        """Lazy-load the ProSyncAdapter using current settings."""
+        from vibecode.integrations.pro_sync import ProSyncAdapter
+
+        return ProSyncAdapter(
+            endpoint=self.settings.pro_endpoint,
+            token=self.settings.pro_token,
+        )
+
+    def pro_share(self, memory_type: str, memory_id: str) -> dict[str, Any]:
+        """Share a local pattern to the Pro databank."""
+        adapter = self._get_pro_adapter()
+        if not adapter.is_configured():
+            return self._error("PRO_NOT_CONFIGURED")
+
+        if self.conn is None:
+            return self._error("STORAGE_NOT_INITIALIZED")
+
+        data: dict[str, Any] = {}
+        if memory_type == "failure_pattern":
+            row = self.conn.execute(
+                "SELECT * FROM failure_patterns WHERE failure_id = ? AND is_active = 1", (memory_id,)
+            ).fetchone()
+            if row is None:
+                return self._error("NOT_FOUND")
+            data = {
+                k: v for k, v in dict(row).items()
+                if k not in ("is_active", "content_hash", "agent_source", "source_ref")
+            }
+        elif memory_type == "success_pattern":
+            row = self.conn.execute(
+                "SELECT * FROM success_patterns WHERE pattern_id = ? AND is_active = 1", (memory_id,)
+            ).fetchone()
+            if row is None:
+                return self._error("NOT_FOUND")
+            data = {
+                k: v for k, v in dict(row).items()
+                if k not in ("is_active", "content_hash", "agent_source", "source_ref")
+            }
+        else:
+            return self._error("INVALID_MEMORY_TYPE")
+
+        result = adapter.submit(memory_type=memory_type, data=data)
+        if "error" in result:
+            return {"error": "PRO_SUBMIT_FAILED", "message": result["error"]}
+        return result
+
+    def pro_retract(self, submission_id: str) -> dict[str, Any]:
+        """Retract a previously shared pattern from the Pro databank."""
+        adapter = self._get_pro_adapter()
+        if not adapter.is_configured():
+            return self._error("PRO_NOT_CONFIGURED")
+        result = adapter.retract(submission_id)
+        if "error" in result:
+            return {"error": "PRO_RETRACT_FAILED", "message": result["error"]}
+        return result
+
+    def pro_status(self) -> dict[str, Any]:
+        """Return Pro databank connection status."""
+        adapter = self._get_pro_adapter()
+        if not adapter.is_configured():
+            return {
+                "configured": False,
+                "message": "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN to enable.",
+            }
+        result = adapter.get_status()
+        result["configured"] = True
+        return result
+
+    def pro_search(self, query: str, max_results: int = 10) -> dict[str, Any]:
+        """Search the Pro databank for patterns matching *query*."""
+        adapter = self._get_pro_adapter()
+        if not adapter.is_configured():
+            return self._error("PRO_NOT_CONFIGURED")
+        return adapter.search(query=query, max_results=max_results)
+
+    # ------------------------------------------------------------------
+    # Phase 5: Extended token report with source buckets
+    # ------------------------------------------------------------------
+
+    def get_token_report_buckets(self, project_path: str | None = None, days: int = 30) -> dict[str, Any]:
+        """Return token report broken down by source_type bucket.
+
+        Buckets:
+          local     — manually captured patterns (source_type = 'manual' or 'session-learning')
+          harvested — patterns extracted by the harvester (source_type LIKE 'harvest:%')
+          auto      — auto-captured patterns (source_type LIKE 'auto:%')
+          pro_team  — patterns from the Pro team databank (source_type LIKE 'pro_team:%')
+          pro_global — patterns from the Pro global databank (source_type LIKE 'pro_global:%')
+        """
+        base_report = self.get_token_report(project_path=project_path, days=days)
+
+        if self.conn is None:
+            buckets = {
+                "local": 0, "harvested": 0, "auto": 0, "pro_team": 0, "pro_global": 0
+            }
+        else:
+            def _count(table: str, id_col: str, pattern: str) -> int:
+                row = self.conn.execute(  # type: ignore[union-attr]
+                    f"SELECT COUNT(*) AS c FROM {table} WHERE is_active = 1 AND source_type LIKE ?",
+                    (pattern,),
+                ).fetchone()
+                return int(row["c"]) if row else 0
+
+            buckets = {
+                "local": (
+                    _count("success_patterns", "pattern_id", "manual")
+                    + _count("failure_patterns", "failure_id", "manual")
+                    + _count("success_patterns", "pattern_id", "session-learning")
+                    + _count("failure_patterns", "failure_id", "session-learning")
+                ),
+                "harvested": (
+                    _count("success_patterns", "pattern_id", "harvest:%")
+                    + _count("failure_patterns", "failure_id", "harvest:%")
+                    + _count("project_rules", "rule_id", "harvest:%")
+                ),
+                "auto": (
+                    _count("success_patterns", "pattern_id", "auto:%")
+                    + _count("failure_patterns", "failure_id", "auto:%")
+                ),
+                "pro_team": (
+                    _count("success_patterns", "pattern_id", "pro_team:%")
+                    + _count("failure_patterns", "failure_id", "pro_team:%")
+                ),
+                "pro_global": (
+                    _count("success_patterns", "pattern_id", "pro_global:%")
+                    + _count("failure_patterns", "failure_id", "pro_global:%")
+                ),
+            }
+
+        base_report["source_buckets"] = buckets
+        return base_report
+
     @staticmethod
     def _error(code: str, project_path: str | None = None) -> dict[str, Any]:
         messages = {
@@ -841,6 +1082,10 @@ class VibeCodeService:
             "INVALID_MEMORY_TYPE": (
                 "Unsupported memory type.",
                 "Use success_pattern, failure_pattern, or project_rule.",
+            ),
+            "PRO_NOT_CONFIGURED": (
+                "Pro databank not configured.",
+                "Set VIBECODE_PRO_ENDPOINT and VIBECODE_PRO_TOKEN environment variables.",
             ),
         }
         msg, fix = messages.get(code, ("Unknown error.", ""))

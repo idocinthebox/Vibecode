@@ -34,6 +34,7 @@
     "onCommand:vibeCode.harvestProjectKnowledge",
     "onCommand:vibeCode.openReviewQueue",
     "onCommand:vibeCode.installAgentInstructions",
+    "onCommand:vibeCode.shareToDatabank",
     "onCommand:vibeCode.serviceStatus",
     "onView:vibeCodeMemory",
     "onView:vibeCodeReviewQueue",
@@ -161,6 +162,12 @@
         "title": "Install Agent Instructions in Workspace",
         "category": "VibeCode",
         "icon": "$(book)"
+      },
+      {
+        "command": "vibeCode.shareToDatabank",
+        "title": "Share Pattern to Pro Databank",
+        "category": "VibeCode",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
@@ -463,6 +470,21 @@
           },
           "default": ["copilot", "claude", "cursor", "windsurf", "agents"],
           "description": "Which agent rule files to write/merge VibeCode instructions into."
+        },
+        "vibeCode.pro.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Pro databank features (shared team/global patterns)."
+        },
+        "vibeCode.pro.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "URL of the Pro databank server (e.g. https://pro.vibecode.io)."
+        },
+        "vibeCode.autoRecall.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically recall failure patterns when a terminal command exits with a non-zero code."
         }
       }
     }

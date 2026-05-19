@@ -42,6 +42,8 @@ import { registerInstallAgentRulesCommand } from './commands/installAgentRulesCo
 import { registerHarvestProjectKnowledgeCommand } from './commands/harvestProjectKnowledgeCommand';
 import { registerConfirmHarvestedPendingCommand } from './commands/confirmHarvestedPendingCommand';
 import { registerDiscardHarvestedPendingCommand } from './commands/discardHarvestedPendingCommand';
+import { registerShareToDatabankCommand } from './commands/shareToDatabankCommand';
+import { TerminalRecallService } from './services/terminalRecallService';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = getLogger();
@@ -210,6 +212,18 @@ export function activate(context: vscode.ExtensionContext): void {
     registerOpenReviewQueueCommand(context, reviewProvider),
     registerHarvestProjectKnowledgeCommand(context, api, workspace, reviewProvider),
   ];
+
+  // Phase 4: Pro databank share command
+  registerShareToDatabankCommand(context, api, vscode.workspace);
+
+  // Phase 8: Terminal auto-recall on error
+  const terminalRecall = new TerminalRecallService(
+    api,
+    () => vscode.workspace.workspaceFolders,
+    () => vscode.workspace.getConfiguration('vibeCode'),
+  );
+  terminalRecall.register(context);
+  context.subscriptions.push(terminalRecall);
 
   // Agent rules installer (prompt-once per workspace by default).
   const rulesInstaller = new RulesInstallerService(workspace, context);

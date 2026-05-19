@@ -157,5 +157,41 @@ def vibecode_health_check() -> str:
     return tools.health_check()
 
 
+@mcp.tool()
+def vibecode_pre_command_check(
+    command: str,
+    project_path: str | None = None,
+) -> str:
+    """Check a shell command against VibeCode failure patterns before execution.
+
+    Call this BEFORE running any non-trivial terminal command. Returns a list
+    of matching failure warnings so you can adjust the command or warn the user.
+    """
+    return tools.check_command(command=command, project_path=project_path)
+
+
+@mcp.tool()
+def vibecode_auto_recall_on_error(
+    error_output: str,
+    project_path: str | None = None,
+    command: str | None = None,
+) -> str:
+    """Recall relevant failure patterns and rules after a terminal command fails.
+
+    Call this whenever a terminal command exits with a non-zero code and you want
+    VibeCode memory to help diagnose and fix the error.
+
+    Args:
+        error_output: The terminal error text (first 300 chars used for search).
+        project_path: Optional project path for context.
+        command: Optional command that failed (improves search accuracy).
+    """
+    return tools.recall_on_error(
+        error_output=error_output,
+        project_path=project_path,
+        command=command,
+    )
+
+
 def run_mcp_server() -> None:
     mcp.run()

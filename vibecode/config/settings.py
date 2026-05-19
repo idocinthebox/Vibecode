@@ -32,6 +32,13 @@ class ServiceSettings(BaseSettings):
     auto_capture_min_confidence: float = 0.6
     auto_capture_require_review: bool = True
     pre_edit_check_rate_limit_per_min: int = 30
+    rate_limit_default_per_min: int = 120
+    pro_enabled: bool = False
+    pro_endpoint: str = ""
+    pro_token: str = ""
+    confidence_decay_interval_hours: int = 6
+    auto_recall_enabled: bool = True
+    pre_command_check_enabled: bool = True
 
     @property
     def allowlist_paths(self) -> list[str]:
