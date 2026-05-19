@@ -1,94 +1,126 @@
 # Packet 6/7 Final Report
 
 Date: 2026-05-19
-Scope: Phase 3, Phase 4, Phase 5, and Phase 8 implementation slices
-Status: Completed in verified slices (targeted tests green)
+Repository: Vibecoder
+Status: Phase 0-5 implementation delivered; closure validation updated in this pass.
 
-## Summary
+## 1. Summary
 
-This pass completed the remaining Phase 3/4/5/8 implementation work across:
-- Pro databank server routes and integration adapter flow
-- MCP tool surface for pre-command checks and error recall
-- CLI wiring for Pro commands and extended doctor diagnostics
-- Injection merge/rerank behavior with local-first scoring boost
-- API surface additions for token bucket reporting and terminal recall paths
-- VS Code extension command + terminal recall hooks and API typings
-- Targeted test coverage for new behavior
+Shipped versions:
+- Python package: `vibecode 0.1.0`
+- VS Code extension: `vibe-code-extension 0.1.1`
 
-## Key Changes
+Commit hashes by phase:
+- Phase 0 foundations: `f7edbc1`
+- Phase 1 harvester MVP: `071bbcf`
+- Phase 2 harvester coverage + extension UX: `f6c80fe`
+- Phase 3/4/5 unified delivery: `8909851`
+- Follow-up hardening/fixes: `6ed482a`
 
-### Backend (Python)
+Final closure additions in current working tree:
+- Added `tests/databank/test_retract.py`
+- Added `tests/databank/test_pgvector.py`
+- Added `vibe-code-extension/test/suite/proShareCommand.test.ts`
+- Updated `pyproject.toml` pytest marker registration (`pro_server`)
 
-- Added/updated Pro and Phase 8 server capabilities:
-  - `server/pro/main.py`: optional `data_dir` parameter for test isolation.
-  - `vibecode/integrations/pro_sync.py`: validated by adapter tests.
-  - `vibecode/api/routes_pro.py`: Pro + check-command + recall-on-error routes.
-  - `vibecode/mcp/tools.py`: `check_command` and `recall_on_error` wrappers.
-  - `vibecode/mcp/server.py`: `vibecode_pre_command_check` and `vibecode_auto_recall_on_error` MCP tools.
+## 2. Architecture Diagram
 
-- Extended memory and injection behavior:
-  - `vibecode/core/memory_service.py`: `_error` includes `PRO_NOT_CONFIGURED` and Pro helper methods were exercised through tests.
-  - `vibecode/services/injection_service.py`:
-    - Added `_merge_and_rerank(local, remote, local_first_boost=0.25)`.
-    - Added optional Pro search + mapping into local `SearchResult` model.
-    - Merged local and remote results with local-first additive confidence boost.
+```mermaid
+flowchart LR
+  User[Developer in VS Code] --> Ext[VibeCode Extension]
+  Ext --> LocalAPI[Local FastAPI Service]
+  Ext --> ProAPI[Pro Databank API]
 
-- Added hardening and observability coverage:
-  - `vibecode/api/middleware.py`: rate-limit middleware validated.
-  - `vibecode/jobs/confidence_decay.py`: scheduler and run-once behavior validated.
-  - `vibecode/cli/commands_doctor.py`: includes Harvester and Pro status rows.
-  - `vibecode/api/schemas.py` + `vibecode/api/routes_memory.py`:
-    - Added `TokenReportBucketsResponse`.
-    - Added `/reports/tokens/buckets` endpoint.
+  LocalAPI --> SQLite[(SQLite Local Memory)]
+  LocalAPI --> Harvest[Harvester + Review Queue]
+  LocalAPI --> MCP[MCP Tools]
 
-- CLI wiring:
-  - `vibecode/cli/app.py`: added `pro` command group (`share`, `retract`, `status`).
+  ProAPI --> ProDB[(Pro Databank Store)]
+  ProAPI --> Moderation[Moderation Queue]
 
-### VS Code Extension (TypeScript)
+  LocalAPI --> Merge[Injection Merge/Rerank]
+  ProAPI --> Merge
+  Merge --> Ext
 
-- Added command/service files:
-  - `vibe-code-extension/src/commands/shareToDatabankCommand.ts`
-  - `vibe-code-extension/src/services/terminalRecallService.ts`
+  LocalAPI --> Audit[(audit_log)]
+  ProAPI --> Audit
+```
 
-- Extended API client/types and activation wiring:
-  - `vibe-code-extension/src/services/apiClient.ts`
-  - `vibe-code-extension/src/types/api.ts`
-  - `vibe-code-extension/src/extension.ts`
-  - `vibe-code-extension/package.json`
+## 3. Acceptance Matrix
 
-## Tests Added/Updated
+| Section 11 Criterion | Status | Evidence |
+| --- | --- | --- |
+| 1. Local retrieval p95 regression <= 10% vs Packet 5 baseline | Fail (not benchmarked) | No baseline/perf harness artifact committed in this pass |
+| 2. No item published without explicit user action | Pass | Extension command-driven publish path in `vibeCode.shareToDatabank`; tests in `vibe-code-extension/test/suite/proShareCommand.test.ts` |
+| 3. Every harvested/shared item has resolvable `source_ref` | Partial | Existing harvest/pro pipelines populate source metadata; full corpus audit not run in this pass |
+| 4. `vibecode doctor` OK on clean install with Pro disabled | Pass | `tests/test_doctor_extended.py` |
+| 5. `vibecode doctor` OK with Pro-enabled Docker fixture | Pass | `tests/test_doctor_extended.py`, `tests/test_pro_sync_adapter.py` |
+| 6. All Phase 1-5 tests green on Windows and Linux | Partial | Windows targeted runs green; Linux CI evidence not generated in this pass |
+| 7. Shared `audit_log` records capture/harvest/publish/retract/moderate/search/inject | Partial | Phase 0 audit logging delivered (`f7edbc1`); full end-to-end audit completeness run not repeated in this pass |
+| 8. Token savings attribution bucketed correctly | Pass | `tests/test_token_report_buckets.py` |
 
-Added new targeted tests:
-- `tests/test_pro_sync_adapter.py`
-- `tests/test_injection_merge.py`
-- `tests/test_rate_limit_middleware.py`
-- `tests/test_confidence_decay_job.py`
-- `tests/test_doctor_extended.py`
-- `tests/test_pre_command_check.py`
-- `tests/test_token_report_buckets.py`
-- `tests/databank/test_contributions.py`
-- `tests/databank/test_search.py`
-- `tests/databank/test_moderation.py`
+## 4. Test Results
 
-Adjusted these tests during verification to match current schema/contracts (allowlist JSON shape, moderation request body requirements, schema init function naming, and sqlite column conventions).
+Pytest (current validation pass):
+- Databank tests: `9 passed, 1 skipped`
+  - Command: `python -m pytest tests/databank/test_retract.py tests/databank/test_pgvector.py tests/databank/test_contributions.py tests/databank/test_search.py tests/databank/test_moderation.py`
+- Phase 4/5 backend tests: `30 passed`
+  - Command: `python -m pytest tests/test_pro_sync_adapter.py tests/test_injection_merge.py tests/test_token_report_buckets.py tests/test_rate_limit_middleware.py tests/test_confidence_decay_job.py tests/test_doctor_extended.py`
 
-## Verification
+Mocha (extension):
+- `52 passing`
+  - Command: `cd vibe-code-extension && npm test`
 
-Command run:
+Coverage:
+- No new coverage artifact generated in this pass (no `pytest-cov` output captured).
 
-`d:/Vibecoder/.venv/Scripts/python.exe -m pytest tests/test_pro_sync_adapter.py tests/test_injection_merge.py tests/test_rate_limit_middleware.py tests/test_confidence_decay_job.py tests/test_doctor_extended.py tests/test_pre_command_check.py tests/test_token_report_buckets.py tests/databank/test_contributions.py tests/databank/test_search.py tests/databank/test_moderation.py`
+## 5. Performance Numbers
 
-Result:
-- 35 passed
-- 0 failed
+Required metrics from Section 12 template:
 
-## Follow-ups
+| Endpoint / Scenario | p50 | p95 | Notes |
+| --- | --- | --- | --- |
+| `inject_context` | N/A | N/A | Benchmark not executed in this pass |
+| `search` | N/A | N/A | Benchmark not executed in this pass |
+| `pre_edit_check` | N/A | N/A | Benchmark not executed in this pass |
+| `harvest/scan` on 1k-file repo | N/A | N/A | 1k-file benchmark harness not executed in this pass |
+| `databank/search` on 10k-item store | N/A | N/A | 10k-item load benchmark not executed in this pass |
 
-- Full repo test suite has not been run in this pass.
-- No commit was created in this pass (working tree remains dirty with unrelated existing graphify cache changes).
-- Optional: add extension-side tests for `shareToDatabankCommand` and terminal recall hook behavior.
+## 6. Security Review
 
-## Notes
+- Secret redaction hardening included in prior packet implementation (`tests/test_secret_redaction.py`).
+- Route-level rate limiting verified (`tests/test_rate_limit_middleware.py`).
+- Databank contribution and moderation boundaries verified (`tests/databank/test_contributions.py`, `tests/databank/test_moderation.py`).
+- Retract behavior verified so withdrawn items are no longer searchable (`tests/databank/test_retract.py`).
+- pgvector path verified with PostgreSQL integration test (`tests/databank/test_pgvector.py`, skips cleanly when PostgreSQL fixture is unavailable).
 
-- Commit hashes: N/A (no commit created in this phase report).
-- VibeCode memory MCP tools (`vibecode_inject_context`, `vibecode_capture_failure`, `vibecode_capture_success`) were not available as callable tools in this runtime; implementation proceeded with direct code + pytest verification.
+## 7. Token-Savings Measurement
+
+- Bucket attribution validation is covered by `tests/test_token_report_buckets.py`.
+- Result: bucket totals and anti-double-count checks pass in scripted test scenarios.
+- A fresh end-to-end CLI/API token-savings run artifact was not generated in this pass.
+
+## 8. Known Limitations
+
+1. Performance baseline vs Packet 5 is not documented with measured p50/p95 artifacts.
+2. Linux test-run evidence was not regenerated in this pass.
+3. Full-program coverage gating (>=85% per new module) was not re-reported in this pass.
+4. `tests/databank/test_pgvector.py` is environment-dependent and may skip when local PostgreSQL is unavailable.
+
+## 9. Migration / Rollback Notes
+
+- Apply latest migrations:
+  - `alembic upgrade head`
+- Verify current revision:
+  - `alembic current`
+- Roll back one revision:
+  - `alembic downgrade -1`
+- For SQLite-backed local Pro store, schema guards in `server/pro/db/schema.py` handle additive migrations at startup.
+
+## 10. Next Steps (Packet 8 Candidates)
+
+1. Add reproducible perf harness for Section 12 required metrics and commit benchmark artifacts.
+2. Run full Windows + Linux CI matrix and attach logs to this report.
+3. Add explicit audit-log completeness contract tests that exercise every required action path.
+4. Add coverage job output (line + branch) and enforce per-module gates.
+5. Add a dedicated end-to-end token-savings scenario artifact (CLI + API output snapshots).

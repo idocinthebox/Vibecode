@@ -45,3 +45,6 @@ include = ["vibecode*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "pro_server: tests that require Pro server/PostgreSQL integration",
+]
