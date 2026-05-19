@@ -22,6 +22,7 @@ build/
 .vibecode/exports/
 .vibecode/logs/
 .vibecode/config.toml
+.vibecode/agent-context.md
 
 # IDE
 .vscode/
@@ -30,6 +31,7 @@ build/
 
 # Shell-redirection accidents
 =*
+.tmp_*.ps1
 
 # OS
 .DS_Store
@@ -43,3 +45,10 @@ vibe-code-extension/out/
 vibe-code-extension/.vscode-test/
 vibe-code-extension/*.vsix
 vibe-code-extension/.eslintcache
+
+# Local generated artifacts
+graphify-out/
+Docs/chat-history/
+chat-current.md
+chat-old-vibecode.md
+Vibecode.code-workspace
