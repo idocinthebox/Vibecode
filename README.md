@@ -60,6 +60,12 @@ During a single dogfooding session on this repo, the agent rediscovered four sti
 
 GPT-4o / o1-preview blending pricing, that is a pure waste of API spend per session. Extrapolated across a 100-dev engineering team, rediscovery costs upwards of ~$7k–$10k/year in redundant LLM context context window stuffing.
 
+| Scope | Average Redundant Spend (GPT-4o) |
+|---|---|
+| 1 Developer, 1 Session | ~$0.10 - $0.15 |
+| 1 Developer, 5 Sessions / Week | ~$0.75 - $1.00 / week |
+| **100-Developer Org, 1 Year** | **~$4,000 – $5,200 / year** |
+
 At Claude Opus pricing (~$15/M input, $75/M output; ~70/30 retry mix → ~$33/M blended), that is **~$0.46 of pure rediscovery in one session**. Extrapolated:
 
 | Scope | Approx. wasted spend |
@@ -142,6 +148,7 @@ vibecode inject --query "Add auth middleware to this route" --output context.md
 ---
 
 ## VSCode Extension Highlights
+![VSCode Extension Sidebar and Inline Warnings](https://githubusercontent.com
 
 - **Activity Bar Sidebar** — Browse failure warnings, project rules, and success patterns.
 - **Inline Warnings** — Squiggly underlines when your code matches a known failure pattern; hover for prevention rules.
