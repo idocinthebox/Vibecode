@@ -58,6 +58,8 @@ VibeCode builds a local memory bank of your successful patterns, failed attempts
 
 During a single dogfooding session on this repo, the agent rediscovered four sticky footguns it had hit before — duplicate workspace folders, PowerShell `\"` quoting, `git push` masking a failed commit with `Everything up-to-date`, and sibling typer subcommands not sharing option names. Total wasted exchanges: **~14,000 tokens**.
 
+GPT-4o / o1-preview blending pricing, that is a pure waste of API spend per session. Extrapolated across a 100-dev engineering team, rediscovery costs upwards of ~$7k–$10k/year in redundant LLM context context window stuffing.
+
 At Claude Opus pricing (~$15/M input, $75/M output; ~70/30 retry mix → ~$33/M blended), that is **~$0.46 of pure rediscovery in one session**. Extrapolated:
 
 | Scope | Approx. wasted spend |
