@@ -25,7 +25,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "sqlalchemy>=2.0.0",
     "pytest>=7.0.0",
-    "mcp>=0.1.0",       # Ensures the MCP Server protocols are available
+    "mcp>=0.1.0",
 ]
 
 [project.scripts]
@@ -33,4 +33,4 @@ vibecode = "vibecode.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vibecode*"]
+include = ["vibecode*", "server*"]
